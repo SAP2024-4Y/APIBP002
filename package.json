@@ -1,0 +1,33 @@
+{
+  "name": "apibp002-shopmesh",
+  "version": "1.0.0",
+  "description": "ShopMesh — dual REST + GraphQL API for an online shopping domain (APIBP002)",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test",
+    "lint": "eslint src tests"
+  },
+  "dependencies": {
+    "@apollo/server": "^4.11.0",
+    "better-sqlite3": "^11.3.0",
+    "cors": "^2.8.5",
+    "dataloader": "^2.2.2",
+    "express": "^4.21.0",
+    "graphql": "^16.9.0",
+    "graphql-tag": "^2.12.6",
+    "jsonwebtoken": "^9.0.2",
+    "swagger-ui-express": "^5.0.1",
+    "yaml": "^2.5.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.12.0",
+    "eslint": "^9.12.0",
+    "globals": "^15.10.0",
+    "supertest": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
