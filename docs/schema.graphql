@@ -1,0 +1,135 @@
+"""
+ShopMesh GraphQL schema (APIBP002).
+Approach A: this schema is a thin, strongly-typed layer over the same domain
+services that back the REST API. The committed SDL is authoritative and is
+loaded verbatim by the running server at /graphql.
+"""
+
+scalar DateTime
+
+type Query {
+  "Fetch a single product by id."
+  product(id: ID!): Product
+
+  "List API — filtering, sorting, and Relay-style cursor pagination."
+  products(
+    first: Int = 20
+    after: String
+    status: ProductStatus
+    category: String
+    minPrice: Float
+    maxPrice: Float
+    sort: ProductSort = CREATED_AT
+    order: SortOrder = DESC
+  ): ProductConnection!
+
+  "Map API — proximity (radius) search. GeoJSON order is [longitude, latitude]."
+  productsNear(latitude: Float!, longitude: Float!, radiusKm: Float!): [ProductHit!]!
+
+  "Map API — bounding-box search (SW + NE corners)."
+  productsInBounds(minLat: Float!, minLon: Float!, maxLat: Float!, maxLon: Float!): [Product!]!
+
+  "Calendar API — delivery slots overlapping an optional [startsAt, endsAt] window."
+  slots(productId: ID, startsAt: DateTime, endsAt: DateTime): [Slot!]!
+
+  "Bookings owned by the authenticated caller."
+  myBookings: [Booking!]!
+}
+
+type Mutation {
+  "Issue a JWT for a demo account. Mirrors POST /api/v1/auth/token."
+  requestToken(username: String!, password: String!): AuthPayload!
+
+  "Book a delivery slot. Fails with extensions.code SLOT_FULL / BOOKING_OVERLAP on conflict."
+  bookSlot(slotId: ID!, quantity: Int! = 1): Booking!
+}
+
+enum ProductStatus {
+  active
+  out_of_stock
+  discontinued
+}
+
+enum ProductSort {
+  CREATED_AT
+  PRICE
+  NAME
+  RATING
+  ID
+}
+
+enum SortOrder {
+  ASC
+  DESC
+}
+
+type Product {
+  id: ID!
+  name: String!
+  description: String
+  category: String!
+  "Exact price in paise (integer) — the authoritative monetary field."
+  priceInPaise: Int!
+  "Rupee price as a float. Deprecated: use priceInPaise to avoid float rounding."
+  price: Float! @deprecated(reason: "Use priceInPaise for exact integer currency handling; price is a lossy float.")
+  currency: String!
+  status: ProductStatus!
+  seller: String
+  rating: Float
+  "GeoJSON point; coordinates are [longitude, latitude]."
+  location: GeoLocation!
+  createdAt: DateTime!
+  "Delivery slots for this product (batched via DataLoader to avoid N+1)."
+  slots(startsAt: DateTime, endsAt: DateTime): [Slot!]!
+}
+
+type GeoLocation {
+  type: String!
+  coordinates: [Float!]!
+}
+
+type ProductHit {
+  product: Product!
+  distanceKm: Float!
+}
+
+type ProductConnection {
+  edges: [ProductEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int
+}
+
+type ProductEdge {
+  cursor: String!
+  node: Product!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  endCursor: String
+}
+
+type Slot {
+  id: ID!
+  productId: ID!
+  product: Product!
+  startsAt: DateTime!
+  endsAt: DateTime!
+  capacity: Int!
+  booked: Int!
+  available: Int!
+}
+
+type Booking {
+  id: ID!
+  slotId: ID!
+  user: String!
+  quantity: Int!
+  createdAt: DateTime!
+}
+
+type AuthPayload {
+  token: String!
+  tokenType: String!
+  expiresIn: String!
+}
