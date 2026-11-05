@@ -1,0 +1,392 @@
+openapi: 3.0.3
+info:
+  title: ShopMesh API (APIBP002)
+  version: 1.0.0
+  description: >
+    Dual REST + GraphQL API for an online shopping domain. This OpenAPI document
+    describes the REST surface; the GraphQL schema is served at `/graphql` and
+    committed at `docs/schema.graphql`. All business endpoints are versioned
+    under `/api/v1`.
+  license:
+    name: MIT
+servers:
+  - url: http://localhost:8080
+    description: Local container (docker compose up)
+tags:
+  - name: Health
+  - name: Auth
+  - name: Products (List)
+  - name: Products (Map)
+  - name: Calendar
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  service: { type: string, example: shopmesh }
+                  time: { type: string, format: date-time }
+  /api/v1/auth/token:
+    post:
+      tags: [Auth]
+      summary: Issue a JWT for a demo account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, example: demo }
+                password: { type: string, example: demo-password }
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  token_type: { type: string, example: Bearer }
+                  expires_in: { type: string, example: 2h }
+                  role: { type: string, example: customer }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/products:
+    get:
+      tags: [Products (List)]
+      summary: List products with filtering, sorting, and cursor pagination
+      security: []
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [active, out_of_stock, discontinued] } }
+        - { in: query, name: category, schema: { type: string } }
+        - { in: query, name: min_price, schema: { type: number }, description: Minimum price in INR }
+        - { in: query, name: max_price, schema: { type: number }, description: Maximum price in INR }
+        - { in: query, name: sort, schema: { type: string, enum: [id, name, price, rating, created_at], default: created_at } }
+        - { in: query, name: order, schema: { type: string, enum: [asc, desc], default: desc } }
+        - { in: query, name: limit, schema: { type: integer, default: 20, minimum: 1, maximum: 100 } }
+        - { in: query, name: after, schema: { type: string }, description: Opaque keyset cursor from a prior response }
+      responses:
+        '200':
+          description: A page of products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Product' } }
+                  has_more: { type: boolean }
+                  next_cursor: { type: string, nullable: true }
+                  limit: { type: integer }
+                  sort: { type: string }
+                  order: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    post:
+      tags: [Products (List)]
+      summary: Create a product (admin role required)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductInput' }
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created: { $ref: '#/components/schemas/Product' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/products/map:
+    get:
+      tags: [Products (Map)]
+      summary: Geospatial search — proximity (radius) OR bounding box
+      description: >
+        Provide either (latitude, longitude, radius_km) for a proximity search,
+        or (min_lat, min_lon, max_lat, max_lon) for a bounding-box search.
+        Coordinates follow GeoJSON order [longitude, latitude].
+      security: []
+      parameters:
+        - { in: query, name: latitude, schema: { type: number } }
+        - { in: query, name: longitude, schema: { type: number } }
+        - { in: query, name: radius_km, schema: { type: number }, description: Radius in kilometres }
+        - { in: query, name: min_lat, schema: { type: number }, description: SW corner latitude }
+        - { in: query, name: min_lon, schema: { type: number }, description: SW corner longitude }
+        - { in: query, name: max_lat, schema: { type: number }, description: NE corner latitude }
+        - { in: query, name: max_lon, schema: { type: number }, description: NE corner longitude }
+      responses:
+        '200':
+          description: Matching products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mode: { type: string, enum: [radius, bbox] }
+                  count: { type: integer }
+                  data:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Product'
+                        - type: object
+                          properties:
+                            distance_km: { type: number, nullable: true }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/products/{id}:
+    get:
+      tags: [Products (List)]
+      summary: Fetch a single product
+      security: []
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The product
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/products/{id}/slots:
+    get:
+      tags: [Calendar]
+      summary: Delivery slots for one product within an optional window
+      security: []
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: query, name: starts_at, schema: { type: string, format: date-time } }
+        - { in: query, name: ends_at, schema: { type: string, format: date-time } }
+      responses:
+        '200':
+          description: Slots
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Slot' } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/slots:
+    get:
+      tags: [Calendar]
+      summary: Time-window slot search across all products
+      security: []
+      parameters:
+        - { in: query, name: product_id, schema: { type: string } }
+        - { in: query, name: starts_at, schema: { type: string, format: date-time }, description: ISO-8601 UTC window start }
+        - { in: query, name: ends_at, schema: { type: string, format: date-time }, description: ISO-8601 UTC window end }
+      responses:
+        '200':
+          description: Slots overlapping the window
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Slot' } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/bookings:
+    get:
+      tags: [Calendar]
+      summary: List the authenticated caller's bookings
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Bookings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Booking' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    post:
+      tags: [Calendar]
+      summary: Book a delivery slot (conflict-aware)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slot_id]
+              properties:
+                slot_id: { type: string }
+                quantity: { type: integer, default: 1, minimum: 1 }
+      responses:
+        '201':
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created: { $ref: '#/components/schemas/Booking' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    GeoLocation:
+      type: object
+      properties:
+        type: { type: string, example: Point }
+        coordinates:
+          type: array
+          items: { type: number }
+          minItems: 2
+          maxItems: 2
+          description: '[longitude, latitude]'
+    Product:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        category: { type: string }
+        price: { type: number, description: Rupee price (float, convenience) }
+        price_paise: { type: integer, description: Authoritative integer price in paise }
+        currency: { type: string, example: INR }
+        status: { type: string, enum: [active, out_of_stock, discontinued] }
+        seller: { type: string, nullable: true }
+        rating: { type: number, nullable: true }
+        location: { $ref: '#/components/schemas/GeoLocation' }
+        created_at: { type: string, format: date-time }
+    ProductInput:
+      type: object
+      required: [name, category, status, price, latitude, longitude]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        category: { type: string }
+        status: { type: string, enum: [active, out_of_stock, discontinued] }
+        price: { type: number, description: Rupee price }
+        currency: { type: string, default: INR }
+        seller: { type: string }
+        rating: { type: number }
+        latitude: { type: number }
+        longitude: { type: number }
+    Slot:
+      type: object
+      properties:
+        id: { type: string }
+        product_id: { type: string }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        capacity: { type: integer }
+        booked: { type: integer }
+        available: { type: integer }
+    Booking:
+      type: object
+      properties:
+        id: { type: string }
+        slot_id: { type: string }
+        user: { type: string }
+        quantity: { type: integer }
+        created_at: { type: string, format: date-time }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable domain error code
+              enum:
+                - VALIDATION_ERROR
+                - INVALID_CURSOR
+                - INVALID_CREDENTIALS
+                - UNAUTHENTICATED
+                - FORBIDDEN
+                - NOT_FOUND
+                - PRODUCT_NOT_FOUND
+                - SLOT_NOT_FOUND
+                - SLOT_FULL
+                - BOOKING_OVERLAP
+                - UNPROCESSABLE
+                - INVALID_COORDINATES
+                - RATE_LIMITED
+                - INTERNAL
+            message: { type: string }
+            details: { type: object, nullable: true }
+  responses:
+    ValidationError:
+      description: Malformed request (VALIDATION_ERROR, INVALID_CURSOR)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Missing/invalid credentials or token (INVALID_CREDENTIALS, UNAUTHENTICATED)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Authenticated but not permitted (FORBIDDEN)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource does not exist (NOT_FOUND, PRODUCT_NOT_FOUND, SLOT_NOT_FOUND)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Domain conflict (SLOT_FULL, BOOKING_OVERLAP)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unprocessable:
+      description: Semantically invalid (UNPROCESSABLE, INVALID_COORDINATES)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: Too many requests (RATE_LIMITED)
+      headers:
+        RateLimit-Limit: { schema: { type: integer } }
+        RateLimit-Remaining: { schema: { type: integer } }
+        RateLimit-Reset: { schema: { type: integer } }
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+security:
+  - bearerAuth: []
