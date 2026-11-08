@@ -1,7 +1,5 @@
 # APIBP002 — ShopMesh
 
-Course: `<COURSE CODE & NAME — fill in>` | Section: `<SECTION — fill in>` | Instructor: `<INSTRUCTOR — fill in>`
-
 A production-style backend for an **Online Shopping** marketplace, exposing the
 **same domain over both a REST API and a GraphQL API** (Approach A: REST-first
 with a GraphQL layer over shared services). Includes JWT auth, rate limiting,
