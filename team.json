@@ -1,0 +1,10 @@
+{
+  "team_id": "APIBP002",
+  "approach": "A",
+  "members": [
+    { "name": "Aadarsh Verma", "github_username": "CodeAadarsh" },
+    { "name": "Divyansh Jha", "github_username": "divyanshjha30" },
+    { "name": "Parimita Sarkar", "github_username": "parimitasarkar" },
+    { "name": "Simarpreet Singh", "github_username": "simar295" }
+  ]
+}
