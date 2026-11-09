@@ -16,31 +16,32 @@ const CITIES = [
 ];
 
 // 24 primary entities (> required 20). Prices are stored in paise (INR).
+// Row shape: [name, category, price_paise, status, rating, inventory].
 const CATALOGUE = [
-  ['Aurora Wireless Earbuds', 'Electronics', 499900, 'active', 4.6],
-  ['Nimbus Noise-Cancelling Headphones', 'Electronics', 1299900, 'active', 4.8],
-  ['Pulse Smartwatch Series 6', 'Electronics', 1899900, 'active', 4.4],
-  ['Vertex Mechanical Keyboard', 'Electronics', 749900, 'out_of_stock', 4.7],
-  ['Lumen 4K Action Camera', 'Electronics', 2299900, 'active', 4.3],
-  ['Cotton Classic Oxford Shirt', 'Fashion', 159900, 'active', 4.2],
-  ['Trailblazer Running Shoes', 'Fashion', 449900, 'active', 4.5],
-  ['Monsoon Waterproof Jacket', 'Fashion', 389900, 'discontinued', 4.1],
-  ['Heritage Leather Wallet', 'Fashion', 219900, 'active', 4.6],
-  ['Breeze Linen Trousers', 'Fashion', 269900, 'active', 4.0],
-  ['ChefPro Cast-Iron Skillet', 'Home & Kitchen', 329900, 'active', 4.8],
-  ['Aroma Pour-Over Coffee Set', 'Home & Kitchen', 189900, 'active', 4.5],
-  ['Slumber Memory-Foam Pillow', 'Home & Kitchen', 149900, 'active', 4.3],
-  ['Verde Self-Watering Planter', 'Home & Kitchen', 99900, 'out_of_stock', 4.2],
-  ['Clean Air HEPA Purifier', 'Home & Kitchen', 1599900, 'active', 4.7],
-  ['The Pragmatic Engineer (Hardcover)', 'Books', 89900, 'active', 4.9],
-  ['Designing Data-Intensive Apps', 'Books', 109900, 'active', 4.9],
-  ['Atomic Habits', 'Books', 59900, 'active', 4.8],
-  ['Organic Cold-Pressed Oil 1L', 'Grocery', 54900, 'active', 4.4],
-  ['Himalayan Rock Salt 1kg', 'Grocery', 24900, 'active', 4.3],
-  ['Artisan Dark Roast Beans 500g', 'Grocery', 79900, 'out_of_stock', 4.6],
-  ['Apex Yoga Mat (6mm)', 'Sports', 139900, 'active', 4.5],
-  ['Velocity Adjustable Dumbbell', 'Sports', 899900, 'active', 4.7],
-  ['Glow Vitamin-C Serum', 'Beauty', 129900, 'active', 4.4],
+  ['Aurora Wireless Earbuds', 'Electronics', 499900, 'active', 4.6, 180],
+  ['Nimbus Noise-Cancelling Headphones', 'Electronics', 1299900, 'active', 4.8, 64],
+  ['Pulse Smartwatch Series 6', 'Electronics', 1899900, 'active', 4.4, 42],
+  ['Vertex Mechanical Keyboard', 'Electronics', 749900, 'out_of_stock', 4.7, 0],
+  ['Lumen 4K Action Camera', 'Electronics', 2299900, 'active', 4.3, 23],
+  ['Cotton Classic Oxford Shirt', 'Fashion', 159900, 'active', 4.2, 240],
+  ['Trailblazer Running Shoes', 'Fashion', 449900, 'active', 4.5, 130],
+  ['Monsoon Waterproof Jacket', 'Fashion', 389900, 'discontinued', 4.1, 6],
+  ['Heritage Leather Wallet', 'Fashion', 219900, 'active', 4.6, 95],
+  ['Breeze Linen Trousers', 'Fashion', 269900, 'active', 4.0, 72],
+  ['ChefPro Cast-Iron Skillet', 'Home & Kitchen', 329900, 'active', 4.8, 110],
+  ['Aroma Pour-Over Coffee Set', 'Home & Kitchen', 189900, 'active', 4.5, 88],
+  ['Slumber Memory-Foam Pillow', 'Home & Kitchen', 149900, 'active', 4.3, 160],
+  ['Verde Self-Watering Planter', 'Home & Kitchen', 99900, 'out_of_stock', 4.2, 0],
+  ['Clean Air HEPA Purifier', 'Home & Kitchen', 1599900, 'active', 4.7, 37],
+  ['The Pragmatic Engineer (Hardcover)', 'Books', 89900, 'active', 4.9, 200],
+  ['Designing Data-Intensive Apps', 'Books', 109900, 'active', 4.9, 150],
+  ['Atomic Habits', 'Books', 59900, 'active', 4.8, 300],
+  ['Organic Cold-Pressed Oil 1L', 'Grocery', 54900, 'active', 4.4, 420],
+  ['Himalayan Rock Salt 1kg', 'Grocery', 24900, 'active', 4.3, 510],
+  ['Artisan Dark Roast Beans 500g', 'Grocery', 79900, 'out_of_stock', 4.6, 0],
+  ['Apex Yoga Mat (6mm)', 'Sports', 139900, 'active', 4.5, 140],
+  ['Velocity Adjustable Dumbbell', 'Sports', 899900, 'active', 4.7, 28],
+  ['Glow Vitamin-C Serum', 'Beauty', 129900, 'active', 4.4, 175],
 ];
 
 function pad(n) {
@@ -60,8 +61,8 @@ function seed(db) {
 
   const insertProduct = db.prepare(`
     INSERT OR IGNORE INTO products
-      (id, name, description, category, price_paise, currency, status, seller, rating, longitude, latitude, created_at)
-    VALUES (@id, @name, @description, @category, @price_paise, @currency, @status, @seller, @rating, @longitude, @latitude, @created_at)
+      (id, name, description, category, price_paise, currency, status, seller, rating, inventory, longitude, latitude, created_at)
+    VALUES (@id, @name, @description, @category, @price_paise, @currency, @status, @seller, @rating, @inventory, @longitude, @latitude, @created_at)
   `);
   const insertSlot = db.prepare(`
     INSERT OR IGNORE INTO slots (id, product_id, starts_at, ends_at, capacity, booked)
@@ -73,7 +74,7 @@ function seed(db) {
 
   const tx = db.transaction(() => {
     CATALOGUE.forEach((row, i) => {
-      const [name, category, price, status, rating] = row;
+      const [name, category, price, status, rating, inventory] = row;
       const loc = CITIES[i % CITIES.length];
       const id = `prod_${pad(i + 1)}`;
       insertProduct.run({
@@ -86,6 +87,7 @@ function seed(db) {
         status,
         seller: `${loc.city} Fulfilment Hub`,
         rating,
+        inventory,
         longitude: loc.lon,
         latitude: loc.lat,
         // deterministic, strictly increasing created_at for stable keyset order

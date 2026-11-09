@@ -310,6 +310,7 @@ components:
         status: { type: string, enum: [active, out_of_stock, discontinued] }
         seller: { type: string, nullable: true }
         rating: { type: number, nullable: true }
+        inventory: { type: integer, description: Units currently in stock }
         location: { $ref: '#/components/schemas/GeoLocation' }
         created_at: { type: string, format: date-time }
     ProductInput:
@@ -324,6 +325,7 @@ components:
         currency: { type: string, default: INR }
         seller: { type: string }
         rating: { type: number }
+        inventory: { type: integer, default: 0, description: Units in stock }
         latitude: { type: number }
         longitude: { type: number }
     Slot:

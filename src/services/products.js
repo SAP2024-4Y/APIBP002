@@ -177,6 +177,7 @@ function createProduct(input = {}) {
     status: input.status,
     seller: input.seller || null,
     rating: input.rating === undefined ? null : Number(input.rating),
+    inventory: input.inventory === undefined ? 0 : Math.max(0, Math.trunc(Number(input.inventory) || 0)),
     longitude: lon,
     latitude: lat,
     created_at: new Date().toISOString(),
@@ -184,8 +185,8 @@ function createProduct(input = {}) {
   getDb()
     .prepare(
       `INSERT INTO products
-        (id, name, description, category, price_paise, currency, status, seller, rating, longitude, latitude, created_at)
-       VALUES (@id, @name, @description, @category, @price_paise, @currency, @status, @seller, @rating, @longitude, @latitude, @created_at)`
+        (id, name, description, category, price_paise, currency, status, seller, rating, inventory, longitude, latitude, created_at)
+       VALUES (@id, @name, @description, @category, @price_paise, @currency, @status, @seller, @rating, @inventory, @longitude, @latitude, @created_at)`
     )
     .run(row);
   return row;

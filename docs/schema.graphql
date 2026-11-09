@@ -77,6 +77,8 @@ type Product {
   status: ProductStatus!
   seller: String
   rating: Float
+  "Units currently in stock."
+  inventory: Int!
   "GeoJSON point; coordinates are [longitude, latitude]."
   location: GeoLocation!
   createdAt: DateTime!
