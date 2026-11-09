@@ -192,6 +192,59 @@ function createProduct(input = {}) {
   return row;
 }
 
+// Admin: partial update of a product. Only known fields are writable.
+function updateProduct(id, patch = {}) {
+  const existing = getProductById(id); // throws PRODUCT_NOT_FOUND
+  const sets = [];
+  const args = {};
+  const put = (col, val) => { sets.push(`${col} = @${col}`); args[col] = val; };
+
+  if (patch.name !== undefined) put('name', String(patch.name));
+  if (patch.description !== undefined) put('description', patch.description === null ? null : String(patch.description));
+  if (patch.category !== undefined) put('category', String(patch.category));
+  if (patch.seller !== undefined) put('seller', patch.seller === null ? null : String(patch.seller));
+  if (patch.status !== undefined) {
+    if (!STATUSES.includes(patch.status)) throw new AppError('VALIDATION_ERROR', `status must be one of: ${STATUSES.join(', ')}.`);
+    put('status', patch.status);
+  }
+  if (patch.price !== undefined) {
+    const price = Number(patch.price);
+    if (!Number.isFinite(price) || price < 0) throw new AppError('UNPROCESSABLE', 'price must be a non-negative number.');
+    put('price_paise', Math.round(price * 100));
+  }
+  if (patch.rating !== undefined) put('rating', patch.rating === null ? null : Number(patch.rating));
+  if (patch.inventory !== undefined) {
+    const inv = Number(patch.inventory);
+    if (!Number.isFinite(inv) || inv < 0) throw new AppError('UNPROCESSABLE', 'inventory must be a non-negative integer.');
+    put('inventory', Math.trunc(inv));
+  }
+  if (patch.latitude !== undefined || patch.longitude !== undefined) {
+    const lat = Number(patch.latitude === undefined ? existing.latitude : patch.latitude);
+    const lon = Number(patch.longitude === undefined ? existing.longitude : patch.longitude);
+    if (!isValidLat(lat) || !isValidLon(lon)) throw new AppError('INVALID_COORDINATES', 'latitude/longitude out of range.');
+    put('latitude', lat);
+    put('longitude', lon);
+  }
+  if (sets.length === 0) throw new AppError('VALIDATION_ERROR', 'No updatable fields were provided.');
+
+  args.id = id;
+  getDb().prepare(`UPDATE products SET ${sets.join(', ')} WHERE id = @id`).run(args);
+  return getProductById(id);
+}
+
+// Admin: delete a product and cascade its slots + bookings in one transaction.
+function deleteProduct(id) {
+  const db = getDb();
+  getProductById(id); // throws PRODUCT_NOT_FOUND
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM bookings WHERE slot_id IN (SELECT id FROM slots WHERE product_id = ?)').run(id);
+    db.prepare('DELETE FROM slots WHERE product_id = ?').run(id);
+    db.prepare('DELETE FROM products WHERE id = ?').run(id);
+  });
+  tx();
+  return { id, deleted: true };
+}
+
 module.exports = {
   listProducts,
   countProducts,
@@ -199,6 +252,8 @@ module.exports = {
   productsNear,
   productsInBounds,
   createProduct,
+  updateProduct,
+  deleteProduct,
   SORT_COLUMNS,
   STATUSES,
 };
