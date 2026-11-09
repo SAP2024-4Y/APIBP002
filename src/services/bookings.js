@@ -107,4 +107,24 @@ function createBooking({ slotId, quantity = 1, username }) {
   return booking;
 }
 
-module.exports = { listSlots, getSlotById, listBookingsForUser, createBooking };
+// Cancel a booking the caller owns, releasing the slot capacity.
+function cancelBooking({ id, username }) {
+  const db = getDb();
+  if (!username) throw new AppError('UNAUTHENTICATED');
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) throw new AppError('NOT_FOUND', 'No booking exists with the given id.');
+  if (booking.username !== username) {
+    throw new AppError('FORBIDDEN', 'You can only cancel your own bookings.');
+  }
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM bookings WHERE id = ?').run(id);
+    db.prepare('UPDATE slots SET booked = MAX(0, booked - ?) WHERE id = ?').run(
+      booking.quantity,
+      booking.slot_id
+    );
+  });
+  tx();
+  return { id, slot_id: booking.slot_id, cancelled: true };
+}
+
+module.exports = { listSlots, getSlotById, listBookingsForUser, createBooking, cancelBooking };
