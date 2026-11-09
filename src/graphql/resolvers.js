@@ -75,6 +75,7 @@ const resolvers = {
         const filters = {
           status: args.status,
           category: args.category,
+          q: args.q,
           minPrice: args.minPrice,
           maxPrice: args.maxPrice,
         };
