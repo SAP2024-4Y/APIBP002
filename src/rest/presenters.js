@@ -14,6 +14,7 @@ function productToRest(row) {
     status: row.status,
     seller: row.seller,
     rating: row.rating,
+    inventory: row.inventory,
     location: toGeoJSONPoint(row.longitude, row.latitude),
     created_at: row.created_at,
   };
