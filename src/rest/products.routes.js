@@ -83,6 +83,25 @@ router.post('/', requireAuth, requireRole('admin'), (req, res, next) => {
   }
 });
 
+// PATCH /api/v1/products/:id — admin-only partial update
+router.patch('/:id', requireAuth, requireRole('admin'), (req, res, next) => {
+  try {
+    const updated = products.updateProduct(req.params.id, req.body || {});
+    res.status(200).json({ updated: productToRest(updated) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/v1/products/:id — admin-only; cascades slots + bookings
+router.delete('/:id', requireAuth, requireRole('admin'), (req, res, next) => {
+  try {
+    res.status(200).json(products.deleteProduct(req.params.id));
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/v1/products/:id
 router.get('/:id', (req, res, next) => {
   try {
