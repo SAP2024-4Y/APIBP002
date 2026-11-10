@@ -51,3 +51,19 @@ export function bookSlot(slotId, token) {
 export function myBookings(token) {
   return request('/api/v1/bookings', { token });
 }
+
+export function adminStats(token) {
+  return request('/api/v1/admin/stats', { token });
+}
+
+export function createProduct(token, body) {
+  return request('/api/v1/products', { method: 'POST', body, token });
+}
+
+export function updateProduct(token, id, patch) {
+  return request(`/api/v1/products/${encodeURIComponent(id)}`, { method: 'PATCH', body: patch, token });
+}
+
+export function deleteProduct(token, id) {
+  return request(`/api/v1/products/${encodeURIComponent(id)}`, { method: 'DELETE', token });
+}

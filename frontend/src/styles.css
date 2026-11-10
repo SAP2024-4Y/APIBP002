@@ -291,3 +291,38 @@ a { color: var(--teal); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Admin console ---------- */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 26px;
+}
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.stat-v { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 26px; letter-spacing: -0.02em; }
+.stat-l { color: var(--ink-soft); font-size: 12.5px; margin-top: 2px; }
+.admin-h { font-size: 13px; color: var(--ink-soft); font-weight: 600; margin: 22px 0 10px; }
+.admin-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.admin-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+.admin-table { width: 100%; border-collapse: collapse; background: var(--surface); }
+.admin-table th, .admin-table td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: middle; }
+.admin-table th { color: var(--ink-soft); font-weight: 600; font-size: 12px; }
+.admin-table tr:last-child td { border-bottom: 0; }
+.field.sm { padding: 6px 8px; font-size: 13px; }
+.admin-actions { display: flex; gap: 6px; white-space: nowrap; }
+.ghost.sm, .danger.sm { padding: 6px 12px; font-size: 13px; border-radius: 8px; }
+.danger {
+  background: #fdecef;
+  border: 1px solid #f3c9d4;
+  color: var(--berry);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-weight: 600;
+}
+.danger:hover { background: var(--berry); color: #fff; }
