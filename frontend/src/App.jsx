@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import * as api from './api.js';
+import Admin from './Admin.jsx';
 
 const MOTIF = {
   Electronics: '🎧', Fashion: '👟', 'Home & Kitchen': '🍳', Books: '📚',
@@ -234,7 +235,7 @@ function LoginModal({ onClose, onDone, toast }) {
   const [c, setC] = useState({ username: 'demo', password: 'demo-password' });
   const submit = async (e) => {
     e.preventDefault();
-    try { const r = await api.login(c.username, c.password); onDone(r.token); toast('Signed in', 'ok'); onClose(); }
+    try { const r = await api.login(c.username, c.password); onDone(r.token, r.role); toast('Signed in', 'ok'); onClose(); }
     catch (err) { toast(`${err.code}: ${err.message}`, 'err'); }
   };
   return (
@@ -254,6 +255,7 @@ function LoginModal({ onClose, onDone, toast }) {
 export default function App() {
   const [tab, setTab] = useState('browse');
   const [token, setToken] = useState(null);
+  const [role, setRole] = useState(null);
   const [drawer, setDrawer] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -274,19 +276,24 @@ export default function App() {
   }, [all]);
 
   const requireLogin = () => setLoginOpen(true);
+  const onLogin = (t, r) => { setToken(t); setRole(r); if (r === 'admin') setTab('admin'); };
+  const signOut = () => { setToken(null); setRole(null); setTab('browse'); toast('Signed out'); };
+
+  const TABS = [['browse', 'Browse'], ['nearby', 'Near me'], ['orders', 'My orders']];
+  if (role === 'admin') TABS.push(['admin', 'Admin']);
 
   return (
     <>
       <header className="masthead">
         <div className="wordmark">ShopMesh<span className="dot">.</span><span className="rid">APIBP002</span></div>
         <nav className="tabs" role="tablist">
-          {[['browse', 'Browse'], ['nearby', 'Near me'], ['orders', 'My orders']].map(([k, label]) => (
+          {TABS.map(([k, label]) => (
             <button key={k} role="tab" aria-selected={tab === k} className="tab" onClick={() => setTab(k)}>{label}</button>
           ))}
         </nav>
         <div className="mast-right">
           {token
-            ? <><span className="who">Signed in as <b>demo</b></span><button className="ghost" onClick={() => { setToken(null); toast('Signed out'); }}>Sign out</button></>
+            ? <><span className="who">Signed in · <b>{role}</b></span><button className="ghost" onClick={signOut}>Sign out</button></>
             : <button className="solid" onClick={requireLogin}>Sign in</button>}
         </div>
       </header>
@@ -294,13 +301,14 @@ export default function App() {
       {tab === 'browse' && <Browse onOpen={setDrawer} cityCounts={cityCounts} total={all.length} />}
       {tab === 'nearby' && <Nearby onOpen={setDrawer} toast={toast} />}
       {tab === 'orders' && <Orders token={token} requireLogin={requireLogin} />}
+      {tab === 'admin' && role === 'admin' && <Admin token={token} toast={toast} />}
 
       <footer className="ftr">
         One service, two APIs — REST <code>/api/v1</code> · GraphQL <code>/graphql</code> · OpenAPI <code>/docs</code>
       </footer>
 
       {drawer && <Drawer product={drawer} token={token} onClose={() => setDrawer(null)} toast={toast} requireLogin={requireLogin} />}
-      {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} onDone={setToken} toast={toast} />}
+      {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} onDone={onLogin} toast={toast} />}
 
       <div className="toasts">
         {toasts.map((t) => <div key={t.id} className={`toast ${t.kind || ''}`}>{t.msg}</div>)}
