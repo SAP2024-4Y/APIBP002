@@ -10,7 +10,7 @@ Swagger docs, an embedded GraphQL IDE, and a React storefront.
 
 | # | Name            | Roll No            | GitHub ID        | Email                      |
 |---|-----------------|--------------------|------------------|----------------------------|
-| 1 | Aadarsh Verma   | `<ROLL NO — fill>` | CodeAadarsh      | aadarsh24lv@gmail.com      |
+| 1 | Aadarsh Verma   | `2024sl70013` | CodeAadarsh      | aadarsh24lv@gmail.com      |
 | 2 | Divyansh Jha    | `<ROLL NO — fill>` | divyanshjha30    | divyanshjha30@gmail.com    |
 | 3 | Parimita Sarkar | `2024sl70018`      | parimitasarkar   | parimitasarkar1@gmail.com  |
 | 4 | Simarpreet Singh| `<ROLL NO — fill>` | simar295         | simarconnect@gmail.com     |
