@@ -39,6 +39,11 @@ function buildBaseFilters(params) {
     where.push('category = ?');
     args.push(params.category);
   }
+  if (params.q !== undefined && params.q !== '') {
+    where.push('(name LIKE ? OR description LIKE ?)');
+    const like = `%${params.q}%`;
+    args.push(like, like);
+  }
 
   const minPrice = parsePrice(params.minPrice, 'min_price');
   const maxPrice = parsePrice(params.maxPrice, 'max_price');

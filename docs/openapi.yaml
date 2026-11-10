@@ -73,6 +73,7 @@ paths:
       parameters:
         - { in: query, name: status, schema: { type: string, enum: [active, out_of_stock, discontinued] } }
         - { in: query, name: category, schema: { type: string } }
+        - { in: query, name: q, schema: { type: string }, description: Full-text match on name/description }
         - { in: query, name: min_price, schema: { type: number }, description: Minimum price in INR }
         - { in: query, name: max_price, schema: { type: number }, description: Maximum price in INR }
         - { in: query, name: sort, schema: { type: string, enum: [id, name, price, rating, created_at], default: created_at } }
