@@ -17,6 +17,7 @@ type Query {
     after: String
     status: ProductStatus
     category: String
+    q: String
     minPrice: Float
     maxPrice: Float
     sort: ProductSort = CREATED_AT
