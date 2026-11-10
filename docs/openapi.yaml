@@ -65,6 +65,31 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/admin/stats:
+    get:
+      tags: [Admin]
+      summary: Catalogue + booking metrics (admin role required)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stats:
+                    type: object
+                    properties:
+                      products: { type: integer }
+                      total_inventory: { type: integer }
+                      catalogue_value_paise: { type: integer }
+                      bookings: { type: integer }
+                      low_stock: { type: integer }
+                      out_of_stock: { type: integer }
+                      by_status: { type: object, additionalProperties: { type: integer } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /api/v1/products:
     get:
       tags: [Products (List)]
