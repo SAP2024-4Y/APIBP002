@@ -1,20 +1,21 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// In dev (vite on :5173) proxy API + GraphQL to the backend on :8080.
-// In the Docker image the build output is served by Express at the same origin,
-// so these relative paths need no proxy there.
+// Backend target is configurable so dev can point at any running API port
+// (defaults to 8080, matching the Docker/production setup). In the Docker image
+// the build output is served by Express at the same origin, so no proxy is used.
+const backend = process.env.BACKEND_URL || 'http://localhost:8080';
+
 export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:8080',
-      '/graphql': 'http://localhost:8080',
-      '/health': 'http://localhost:8080',
+      '/api': backend,
+      '/graphql': backend,
+      '/health': backend,
+      '/ready': backend,
     },
   },
-  build: {
-    outDir: 'dist',
-  },
+  build: { outDir: 'dist' },
 });
