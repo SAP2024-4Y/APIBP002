@@ -1,0 +1,14 @@
+# Code owners for APIBP002 — ShopMesh
+# Every pull request requests a review from the whole team by default.
+# Reference: https://docs.github.com/articles/about-code-owners
+
+*                   @CodeAadarsh @divyanshjha30 @parimitasarkar @simar295
+
+# Area owners (first match wins for a path, so keep these after the catch-all
+# only if you want the catch-all to apply; GitHub uses the LAST matching rule).
+/src/graphql/       @parimitasarkar
+/src/rest/          @divyanshjha30
+/src/services/      @CodeAadarsh
+/src/auth/          @simar295
+/frontend/          @parimitasarkar
+/docs/              @CodeAadarsh @simar295
