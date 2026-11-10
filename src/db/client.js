@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS products (
   status      TEXT NOT NULL CHECK (status IN ('active','out_of_stock','discontinued')),
   seller      TEXT,
   rating      REAL,
+  inventory   INTEGER NOT NULL DEFAULT 0,
   longitude   REAL NOT NULL,
   latitude    REAL NOT NULL,
   created_at  TEXT NOT NULL
