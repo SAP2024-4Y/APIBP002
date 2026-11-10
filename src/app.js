@@ -64,6 +64,18 @@ async function buildApp() {
     res.status(200).json({ status: 'ok', service: 'shopmesh', time: new Date().toISOString() });
   });
 
+  // Readiness: confirms the schema is seeded and queryable (distinct from
+  // liveness /health). Returns 503 if the database is not answering.
+  app.get('/ready', (_req, res) => {
+    try {
+      const products = db.prepare('SELECT COUNT(*) AS c FROM products').get().c;
+      const slots = db.prepare('SELECT COUNT(*) AS c FROM slots').get().c;
+      res.status(200).json({ status: 'ready', products, slots });
+    } catch (_err) {
+      res.status(503).json({ status: 'not_ready' });
+    }
+  });
+
   // Interactive REST docs served directly from the running service.
   const openApiDoc = loadOpenApiDocument();
   app.get('/openapi.yaml', (_req, res) => res.type('text/yaml').send(readOpenApiRaw()));
