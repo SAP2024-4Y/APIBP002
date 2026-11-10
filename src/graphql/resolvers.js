@@ -142,6 +142,13 @@ const resolvers = {
         if (!ctx.user) throw new AppError('UNAUTHENTICATED');
         return bookings.createBooking({ slotId, quantity, username: ctx.user.username });
       }),
+
+    cancelBooking: (_root, { bookingId }, ctx) =>
+      guard(() => {
+        if (!ctx.user) throw new AppError('UNAUTHENTICATED');
+        const res = bookings.cancelBooking({ id: bookingId, username: ctx.user.username });
+        return { id: res.id, cancelled: res.cancelled };
+      }),
   },
 
   Product: {
