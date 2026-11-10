@@ -15,6 +15,7 @@ router.get('/', (req, res, next) => {
     const result = products.listProducts({
       status: req.query.status,
       category: req.query.category,
+      q: req.query.q,
       minPrice: req.query.min_price,
       maxPrice: req.query.max_price,
       sort: req.query.sort,
