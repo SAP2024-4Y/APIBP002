@@ -43,6 +43,9 @@ type Mutation {
 
   "Book a delivery slot. Fails with extensions.code SLOT_FULL / BOOKING_OVERLAP on conflict."
   bookSlot(slotId: ID!, quantity: Int! = 1): Booking!
+
+  "Cancel a booking you own, releasing the slot capacity. Mirrors DELETE /api/v1/bookings/:id."
+  cancelBooking(bookingId: ID!): CancelResult!
 }
 
 enum ProductStatus {
@@ -129,6 +132,11 @@ type Booking {
   user: String!
   quantity: Int!
   createdAt: DateTime!
+}
+
+type CancelResult {
+  id: ID!
+  cancelled: Boolean!
 }
 
 type AuthPayload {
