@@ -48,4 +48,14 @@ router.get('/bookings', requireAuth, (req, res, next) => {
   }
 });
 
+// DELETE /api/v1/bookings/:id — cancel an owned booking (releases capacity)
+router.delete('/bookings/:id', requireAuth, (req, res, next) => {
+  try {
+    const result = bookings.cancelBooking({ id: req.params.id, username: req.user.username });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
