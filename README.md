@@ -10,10 +10,10 @@ Swagger docs, an embedded GraphQL IDE, and a React storefront.
 
 | # | Name            | Roll No            | GitHub ID        | Email                      |
 |---|-----------------|--------------------|------------------|----------------------------|
-| 1 | Aadarsh Verma   | `2024sl70013` | CodeAadarsh      | aadarsh24lv@gmail.com      |
-| 2 | Divyansh Jha    | `<ROLL NO — fill>` | divyanshjha30    | divyanshjha30@gmail.com    |
+| 1 | Aadarsh Verma   | `2024sl70013`      | CodeAadarsh      | aadarsh24lv@gmail.com      |
+| 2 | Divyansh Jha    | `2024sl70022`      | divyanshjha30    | divyanshjha30@gmail.com    |
 | 3 | Parimita Sarkar | `2024sl70018`      | parimitasarkar   | parimitasarkar1@gmail.com  |
-| 4 | Simarpreet Singh| `<ROLL NO — fill>` | simar295         | simarconnect@gmail.com     |
+| 4 | Simarpreet Singh| `2024sl70046`      | simar295         | simarconnect@gmail.com     |
 
 - Team ID: `APIBP002` (equals the repository name and `team.json.team_id`)
 - Chosen Approach: `A` — REST-First + GraphQL Layer (equals `team.json.approach`)
