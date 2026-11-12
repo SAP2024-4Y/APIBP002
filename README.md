@@ -1,4 +1,4 @@
-# APIBP002 — ShopMesh
+# APIBP002 -> ShopMesh
 
 A production-style backend for an **Online Shopping** marketplace, exposing the
 **same domain over both a REST API and a GraphQL API** (Approach A: REST-first
