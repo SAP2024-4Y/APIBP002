@@ -1,6 +1,6 @@
-# Contributing to APIBP002 — ShopMesh
+# Contributing to APIBP002 -> ShopMesh
 
-Thanks for contributing! This repo follows a strict feature-branch + pull-request
+This repo follows a strict feature-branch + pull-request
 workflow so that `main` always stays green and every change is peer-reviewed.
 
 ## Workflow
