@@ -166,3 +166,32 @@ test('Authz: admin token can create a product (201)', async () => {
   assert.strictEqual(res.status, 201);
   assert.ok(res.body.created.id);
 });
+
+test('Register: new user gets 201 + JWT', async () => {
+  const res = await request(app)
+    .post('/api/v1/auth/register')
+    .send({ username: 'testuser99', password: 'secret99', email: 'test@example.com' });
+  assert.strictEqual(res.status, 201);
+  assert.ok(res.body.token);
+  assert.strictEqual(res.body.role, 'customer');
+});
+
+test('Register: duplicate username returns 409 CONFLICT', async () => {
+  await request(app).post('/api/v1/auth/register').send({ username: 'dupeuser', password: 'pass123' });
+  const res = await request(app).post('/api/v1/auth/register').send({ username: 'dupeuser', password: 'pass123' });
+  assert.strictEqual(res.status, 409);
+  assert.strictEqual(res.body.error.code, 'CONFLICT');
+});
+
+test('Register: registered user can sign in with their password', async () => {
+  await request(app).post('/api/v1/auth/register').send({ username: 'logintest', password: 'mypassword' });
+  const res = await request(app).post('/api/v1/auth/token').send({ username: 'logintest', password: 'mypassword' });
+  assert.strictEqual(res.status, 200);
+  assert.ok(res.body.token);
+});
+
+test('Register: short username returns 400', async () => {
+  const res = await request(app).post('/api/v1/auth/register').send({ username: 'ab', password: 'validpass' });
+  assert.strictEqual(res.status, 400);
+  assert.strictEqual(res.body.error.code, 'VALIDATION_ERROR');
+});

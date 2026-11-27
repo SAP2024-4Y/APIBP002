@@ -13,7 +13,12 @@ const { toGeoJSONPoint } = require('../util/geo');
 function asGraphQLError(err) {
   if (err instanceof AppError) {
     return new GraphQLError(err.message, {
-      extensions: { code: err.code, http: { status: err.status } },
+      extensions: {
+        code: err.code,
+        http: { status: err.status },
+        hint: err.hint,
+        ...(err.details ? { details: err.details } : {}),
+      },
     });
   }
   return err;
@@ -172,6 +177,7 @@ const resolvers = {
 
   Booking: {
     slotId: (b) => b.slot_id,
+    slot: (b, _args, ctx) => ctx.loaders.slotById.load(b.slot_id),
     user: (b) => b.username,
     createdAt: (b) => b.created_at,
   },

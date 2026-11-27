@@ -1,310 +1,345 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import * as api from './api.js';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { api } from './api.js';
+import Icon from './components/Icon.jsx';
+import Inspector from './components/Inspector.jsx';
+import LoginModal from './components/LoginModal.jsx';
+import ProductDrawer from './components/ProductDrawer.jsx';
+import { cityOf } from './lib/format.js';
+import { buildHubs, latOf, lonOf } from './lib/geo.js';
+import { useApiLog, useHashRoute } from './lib/hooks.js';
+import Shop from './views/Shop.jsx';
+import MapView from './views/MapView.jsx';
+import CalendarView from './views/CalendarView.jsx';
+import Orders from './views/Orders.jsx';
+import Admin from './views/Admin.jsx';
+import Lab from './views/Lab.jsx';
 
-const MOTIF = {
-  Electronics: '🎧', Fashion: '👟', 'Home & Kitchen': '🍳', Books: '📚',
-  Grocery: '🫙', Sports: '🏋️', Beauty: '✨',
-};
-const TINT = {
-  Electronics: '#e6eef2', Fashion: '#f3ebe3', 'Home & Kitchen': '#eaf1ec', Books: '#efe9f2',
-  Grocery: '#f1efe0', Sports: '#e9eef3', Beauty: '#f6eaf0',
-};
-const motif = (c) => MOTIF[c] || '🛍️';
-const tint = (c) => TINT[c] || '#f0ece3';
-const rupees = (paise) => `₹${(paise / 100).toLocaleString('en-IN')}`;
-const cityOf = (seller) => (seller || '').replace(/\s*Fulfilment Hub$/, '') || '—';
-const slotWhen = (s) => {
-  const d = new Date(s.starts_at);
-  const e = new Date(s.ends_at);
-  const day = d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-  const t = (x) => x.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false });
-  return `${day} · ${t(d)}–${t(e)} UTC`;
-};
+const NAV = [
+  { key: 'shop', label: 'Shop', icon: 'bag' },
+  { key: 'map', label: 'Near me', icon: 'pin' },
+  { key: 'calendar', label: 'Delivery slots', icon: 'calendar' },
+  { key: 'orders', label: 'My orders', icon: 'box' },
+  { key: 'admin', label: 'Admin', icon: 'shield' },
+  { key: 'lab', label: 'API Lab', icon: 'flask' },
+];
+const ROUTES = new Set(NAV.map((n) => n.key));
+const WORLD = { min_lat: -90, min_lon: -180, max_lat: 90, max_lon: 180 };
 
-function Card({ p, onOpen }) {
+function initialTheme() {
+  const saved = window.localStorage.getItem('shopmesh-theme');
+  if (saved === 'light' || saved === 'dark') return saved;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function BrandMark() {
   return (
-    <button className="card" onClick={() => onOpen(p)}>
-      <div className="thumb" style={{ background: tint(p.category) }}>{motif(p.category)}</div>
-      <div className="card-body">
-        <span className={`chip ${p.status}`}>{p.status.replace(/_/g, ' ')}</span>
-        <h3>{p.name}</h3>
-        <div className="meta">{p.category} · {cityOf(p.seller)}</div>
-        <div className="row">
-          <span className="price">{rupees(p.price_paise)}</span>
-          {p.rating != null && <span className="rating">★ {p.rating}</span>}
-          {p.distance_km != null && <span className="dist">{p.distance_km} km</span>}
-        </div>
-      </div>
-    </button>
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <path className="bm-lines" d="M16 7L7 23h18L16 7zM16 7v9M7 23l9-7 9 7" />
+      <circle cx="16" cy="7" r="3.2" />
+      <circle cx="7" cy="23" r="3.2" />
+      <circle cx="25" cy="23" r="3.2" />
+      <circle className="bm-core" cx="16" cy="16" r="2.6" />
+    </svg>
   );
 }
 
-function Drawer({ product, token, onClose, toast, requireLogin }) {
-  const [slots, setSlots] = useState(null);
-  const [busy, setBusy] = useState('');
-  const load = useCallback(async () => {
-    try { setSlots((await api.productSlots(product.id)).data); }
-    catch (e) { toast(`${e.code}: ${e.message}`, 'err'); }
-  }, [product.id, toast]);
-  useEffect(() => { load(); }, [load]);
-
-  const book = async (slot) => {
-    if (!token) { requireLogin(); return; }
-    setBusy(slot.id);
-    try {
-      const res = await api.bookSlot(slot.id, token);
-      toast(`Booked — order ${res.created.id.slice(0, 12)}…`, 'ok');
-      load();
-    } catch (e) { toast(`${e.code}: ${e.message}`, 'err'); }
-    finally { setBusy(''); }
-  };
-
-  useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
+function Toasts({ items, dismiss }) {
   return (
-    <>
-      <div className="scrim" onClick={onClose} />
-      <aside className="drawer" role="dialog" aria-label={product.name}>
-        <div className="drawer-head">
-          <button className="x" onClick={onClose} aria-label="Close">×</button>
-          <div style={{ fontSize: 34 }}>{motif(product.category)}</div>
-          <h2 className="display">{product.name}</h2>
-          <div className="meta">{product.category} · {cityOf(product.seller)} · <b>{rupees(product.price_paise)}</b></div>
+    <div className="toasts" aria-live="polite">
+      {items.map((t) => (
+        <div key={t.id} className={`toast ${t.kind}`} role={t.kind === 'err' ? 'alert' : 'status'}>
+          <Icon name={t.kind === 'ok' ? 'check' : t.kind === 'err' ? 'alert' : 'bolt'} size={16} />
+          <div>
+            <b>{t.title}</b>
+            {t.body && <p>{t.body}</p>}
+          </div>
+          <button type="button" className="icon-btn sm" onClick={() => dismiss(t.id)} aria-label="Dismiss">
+            <Icon name="x" size={14} />
+          </button>
         </div>
-        <div className="drawer-body">
-          {product.description && <p style={{ color: 'var(--ink-soft)' }}>{product.description}</p>}
-          <h4>Delivery slots</h4>
-          {slots === null && <div className="meta">Loading slots…</div>}
-          {slots && slots.length === 0 && <div className="meta">No slots for this product.</div>}
-          {slots && slots.map((s) => {
-            const full = s.available <= 0;
-            return (
-              <div className="slot" key={s.id}>
-                <div>
-                  <div className="when">{slotWhen(s)}</div>
-                  <div className="cap">{full ? 'Fully booked' : `${s.available} of ${s.capacity} left`}</div>
-                </div>
-                <button
-                  className={`solid book ${full ? 'full' : ''}`}
-                  disabled={full || busy === s.id}
-                  onClick={() => book(s)}
-                >
-                  {full ? 'Full' : busy === s.id ? '…' : token ? 'Book' : 'Sign in to book'}
-                </button>
+      ))}
+    </div>
+  );
+}
+
+function ProjectBanner({ onDismiss }) {
+  return (
+    <div className="project-banner">
+      <div className="project-banner-inner">
+        <div className="project-banner-left">
+          <span className="project-banner-tag">APIBP002 · Team Project</span>
+          <h2 className="project-banner-title">What is ShopMesh?</h2>
+          <p className="project-banner-desc">
+            ShopMesh is the <strong>API backend for an Indian e-commerce marketplace</strong> — think the engine behind Flipkart or Amazon, not the full consumer app.
+            It solves three problems every shopping platform faces:
+          </p>
+          <div className="project-banner-pillars">
+            <div className="pbp">
+              <span className="pbp-icon">🔍</span>
+              <div>
+                <b>Discover</b>
+                <span>Filter &amp; search 555 products by category, price, status across India</span>
               </div>
-            );
-          })}
-        </div>
-      </aside>
-    </>
-  );
-}
-
-function Browse({ onOpen, cityCounts, total }) {
-  const [f, setF] = useState({ status: '', category: '', min_price: '', max_price: '', sort: 'created_at', order: 'desc' });
-  const [items, setItems] = useState([]);
-  const [cursor, setCursor] = useState(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const load = useCallback(async (reset) => {
-    setLoading(true);
-    try {
-      const res = await api.listProducts({ ...f, limit: 9, after: reset ? undefined : cursor });
-      setItems((prev) => (reset ? res.data : [...prev, ...res.data]));
-      setCursor(res.next_cursor);
-      setHasMore(res.has_more);
-    } finally { setLoading(false); }
-  }, [f, cursor]);
-
-  useEffect(() => { load(true); /* eslint-disable-next-line */ }, [f]);
-  const upd = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
-
-  return (
-    <>
-      <div className="hero">
-        <h1 className="display">Shop the mesh. Delivered on your slot.</h1>
-        <p>A marketplace stitched across {cityCounts.length} Indian fulfilment hubs — browse {total} products and book the exact delivery window that fits your day.</p>
-        <div className="cities">
-          {cityCounts.map((c) => (
-            <span className="city-chip" key={c.city}><span className="pin" /><b>{c.city}</b> <span className="n">{c.n}</span></span>
-          ))}
-        </div>
-      </div>
-      <div className="wrap">
-        <div className="controls">
-          <select className="field" value={f.status} onChange={upd('status')} aria-label="Status">
-            <option value="">All status</option><option value="active">Active</option>
-            <option value="out_of_stock">Out of stock</option><option value="discontinued">Discontinued</option>
-          </select>
-          <select className="field" value={f.category} onChange={upd('category')} aria-label="Category">
-            <option value="">All categories</option>
-            {['Electronics', 'Fashion', 'Home & Kitchen', 'Books', 'Grocery', 'Sports', 'Beauty'].map((c) => <option key={c}>{c}</option>)}
-          </select>
-          <input className="field" type="number" placeholder="Min ₹" value={f.min_price} onChange={upd('min_price')} style={{ width: 92 }} />
-          <input className="field" type="number" placeholder="Max ₹" value={f.max_price} onChange={upd('max_price')} style={{ width: 92 }} />
-          <select className="field" value={f.sort} onChange={upd('sort')} aria-label="Sort by">
-            <option value="created_at">Newest</option><option value="price">Price</option>
-            <option value="rating">Rating</option><option value="name">Name</option>
-          </select>
-          <select className="field" value={f.order} onChange={upd('order')} aria-label="Order">
-            <option value="desc">Desc</option><option value="asc">Asc</option>
-          </select>
-          <span className="count-note">{items.length} shown{hasMore ? ' · more available' : ''}</span>
-        </div>
-        {items.length === 0 && !loading && <div className="empty">No products match these filters.</div>}
-        <div className="grid">{items.map((p) => <Card key={p.id} p={p} onOpen={onOpen} />)}</div>
-        {hasMore && (
-          <div className="more"><button className="ghost" disabled={loading} onClick={() => load(false)}>{loading ? 'Loading…' : 'Load more'}</button></div>
-        )}
-      </div>
-    </>
-  );
-}
-
-function Nearby({ onOpen, toast }) {
-  const [form, setForm] = useState({ latitude: '12.9716', longitude: '77.5946', radius_km: '800' });
-  const [hits, setHits] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const search = useCallback(async () => {
-    setLoading(true);
-    try { setHits((await api.productsNearby(form)).data); }
-    catch (e) { toast(`${e.code}: ${e.message}`, 'err'); }
-    finally { setLoading(false); }
-  }, [form, toast]);
-  useEffect(() => { search(); /* eslint-disable-next-line */ }, []);
-  const upd = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
-  const locate = () => {
-    if (!navigator.geolocation) { toast('Geolocation not available', 'err'); return; }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setForm((p) => ({ ...p, latitude: pos.coords.latitude.toFixed(4), longitude: pos.coords.longitude.toFixed(4) })),
-      () => toast('Could not read your location', 'err')
-    );
-  };
-  return (
-    <div className="wrap" style={{ paddingTop: 28 }}>
-      <h1 className="display" style={{ fontSize: 30, margin: '8px 0 16px', letterSpacing: '-0.02em' }}>Products near you</h1>
-      <div className="controls" style={{ position: 'static' }}>
-        <button className="ghost" onClick={locate}>Use my location</button>
-        <input className="field" value={form.latitude} onChange={upd('latitude')} aria-label="Latitude" style={{ width: 110 }} />
-        <input className="field" value={form.longitude} onChange={upd('longitude')} aria-label="Longitude" style={{ width: 110 }} />
-        <input className="field" value={form.radius_km} onChange={upd('radius_km')} aria-label="Radius km" style={{ width: 100 }} />
-        <button className="solid" onClick={search} disabled={loading}>{loading ? 'Searching…' : 'Search'}</button>
-        <span className="count-note">{hits.length} within {form.radius_km} km</span>
-      </div>
-      {hits.length === 0 && !loading && <div className="empty">No products in range. Widen the radius or pick another point.</div>}
-      <div className="grid">{hits.map((p) => <Card key={p.id} p={p} onOpen={onOpen} />)}</div>
-    </div>
-  );
-}
-
-function Orders({ token, requireLogin }) {
-  const [rows, setRows] = useState([]);
-  useEffect(() => {
-    if (!token) return;
-    api.myBookings(token).then((r) => setRows(r.data)).catch(() => setRows([]));
-  }, [token]);
-  if (!token) {
-    return <div className="wrap"><div className="empty">Sign in to see your delivery bookings.<br /><br /><button className="solid" onClick={requireLogin}>Sign in</button></div></div>;
-  }
-  return (
-    <div className="wrap" style={{ paddingTop: 28 }}>
-      <h1 className="display" style={{ fontSize: 30, margin: '8px 0 16px', letterSpacing: '-0.02em' }}>My orders</h1>
-      {rows.length === 0 ? <div className="empty">No bookings yet. Book a delivery slot from any product.</div> : (
-        <div className="grid">
-          {rows.map((b) => (
-            <div className="card" key={b.id} style={{ padding: 16 }}>
-              <div className="meta">Order</div>
-              <h3 style={{ fontFamily: 'Bricolage Grotesque', fontSize: 15 }}>{b.id}</h3>
-              <div className="meta">Slot {b.slot_id} · ×{b.quantity}</div>
-              <div className="meta">{new Date(b.created_at).toLocaleString('en-IN')}</div>
             </div>
-          ))}
+            <div className="pbp">
+              <span className="pbp-icon">📍</span>
+              <div>
+                <b>Locate</b>
+                <span>Find products whose fulfilment hub is physically close to you (geospatial search)</span>
+              </div>
+            </div>
+            <div className="pbp">
+              <span className="pbp-icon">📅</span>
+              <div>
+                <b>Schedule</b>
+                <span>Book a conflict-free delivery slot — no double-booking, enforced by the API</span>
+              </div>
+            </div>
+          </div>
+          <p className="project-banner-tech">
+            Built with <strong>Node.js · Express · Apollo GraphQL · SQLite · React</strong>.
+            Exposes the same business logic over both a <strong>REST API</strong> (<code>/api/v1/*</code>) and a <strong>GraphQL API</strong> (<code>/graphql</code>),
+            backed by one shared service layer. Includes JWT auth, rate limiting, live Swagger docs, and this React storefront.
+          </p>
+          <div className="project-banner-team">
+            <span>Team:</span>
+            <b>Aadarsh Verma</b>
+            <b>Divyansh Jha</b>
+            <b>Parimita Sarkar</b>
+            <b>Simarpreet Singh</b>
+          </div>
         </div>
-      )}
+        <div className="project-banner-links">
+          <a href="/docs" target="_blank" rel="noopener noreferrer" className="pbl">
+            <Icon name="flask" size={16} /> Swagger / REST docs
+          </a>
+          <a href="/graphql" target="_blank" rel="noopener noreferrer" className="pbl">
+            <Icon name="bolt" size={16} /> GraphQL IDE
+          </a>
+          <a href="/openapi.yaml" target="_blank" rel="noopener noreferrer" className="pbl">
+            <Icon name="box" size={16} /> OpenAPI spec
+          </a>
+          <a href="https://github.com/SAP2024-4Y/APIBP002" target="_blank" rel="noopener noreferrer" className="pbl">
+            <Icon name="pin" size={16} /> GitHub repo
+          </a>
+        </div>
+      </div>
+      <button type="button" className="project-banner-dismiss" onClick={onDismiss} aria-label="Dismiss intro">
+        Got it <Icon name="x" size={13} />
+      </button>
     </div>
-  );
-}
-
-function LoginModal({ onClose, onDone, toast }) {
-  const [c, setC] = useState({ username: 'demo', password: 'demo-password' });
-  const submit = async (e) => {
-    e.preventDefault();
-    try { const r = await api.login(c.username, c.password); onDone(r.token); toast('Signed in', 'ok'); onClose(); }
-    catch (err) { toast(`${err.code}: ${err.message}`, 'err'); }
-  };
-  return (
-    <>
-      <div className="scrim" onClick={onClose} />
-      <form className="modal-card" onSubmit={submit}>
-        <h2 className="display">Sign in</h2>
-        <p>Use the demo account <b>demo</b> / <b>demo-password</b>, or an admin account.</p>
-        <label>Username<input className="field" value={c.username} onChange={(e) => setC({ ...c, username: e.target.value })} /></label>
-        <label>Password<input className="field" type="password" value={c.password} onChange={(e) => setC({ ...c, password: e.target.value })} /></label>
-        <button className="solid" type="submit">Sign in</button>
-      </form>
-    </>
   );
 }
 
 export default function App() {
-  const [tab, setTab] = useState('browse');
-  const [token, setToken] = useState(null);
-  const [drawer, setDrawer] = useState(null);
+  const [route, go] = useHashRoute('shop');
+  const page = ROUTES.has(route) ? route : 'shop';
+  const [session, setSession] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [drawer, setDrawer] = useState(null);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
-  const [all, setAll] = useState([]);
+  const [theme, setTheme] = useState(initialTheme);
+  const [catalogue, setCatalogue] = useState([]);
+  const [ready, setReady] = useState(null);
+  const [mapFocus, setMapFocus] = useState(null);
+  const [bannerVisible, setBannerVisible] = useState(() => !window.sessionStorage.getItem('shopmesh-banner-dismissed'));
+  const log = useApiLog();
 
-  const toast = useCallback((msg, kind) => {
-    const id = Math.random().toString(36).slice(2);
-    setToasts((t) => [...t, { id, msg, kind }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3600);
-  }, []);
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem('shopmesh-theme', theme);
+  }, [theme]);
 
-  useEffect(() => { api.listProducts({ limit: 100 }).then((r) => setAll(r.data)).catch(() => {}); }, []);
+  const dismiss = useCallback((id) => setToasts((all) => all.filter((t) => t.id !== id)), []);
+  const toast = useCallback(
+    (t) => {
+      const id = Math.random().toString(36).slice(2);
+      setToasts((all) => [...all.slice(-3), { id, kind: 'info', ...t }]);
+      setTimeout(() => dismiss(id), t.kind === 'err' ? 7000 : 4200);
+    },
+    [dismiss]
+  );
 
-  const { cityCounts } = useMemo(() => {
-    const m = new Map();
-    all.forEach((p) => { const c = cityOf(p.seller); m.set(c, (m.get(c) || 0) + 1); });
-    return { cityCounts: [...m.entries()].map(([city, n]) => ({ city, n })).sort((a, b) => b.n - a.n) };
-  }, [all]);
+  const loadCatalogue = useCallback(async () => {
+    try {
+      const res = await api.mapBox(WORLD, 'Map API · hub mesh');
+      setCatalogue(res.data);
+    } catch (e) {
+      toast({ kind: 'err', title: e.code, body: e.hint || e.message });
+    }
+  }, [toast]);
 
-  const requireLogin = () => setLoginOpen(true);
+  useEffect(() => {
+    loadCatalogue();
+    api
+      .ready()
+      .then(setReady)
+      .catch(() => setReady({ status: 'down' }));
+  }, [loadCatalogue]);
+
+  const hubs = useMemo(() => buildHubs(catalogue), [catalogue]);
+  const requireLogin = useCallback(() => setLoginOpen(true), []);
+  const closeLogin = useCallback(() => setLoginOpen(false), []);
+  const closeDrawer = useCallback(() => setDrawer(null), []);
+  const closeInspector = useCallback(() => setInspectorOpen(false), []);
+
+  const onSignedIn = (s) => {
+    setSession(s);
+    setLoginOpen(false);
+    toast({ kind: 'ok', title: `Signed in as ${s.username}`, body: `Role: ${s.role} · JWT expires in ${s.expiresIn}` });
+  };
+  const signOut = () => {
+    setSession(null);
+    toast({ kind: 'info', title: 'Signed out', body: 'The token was dropped from memory.' });
+  };
+  const showOnMap = (p) => {
+    setDrawer(null);
+    setMapFocus({ lat: latOf(p), lon: lonOf(p), label: cityOf(p.seller), key: `${p.id}-${Date.now()}` });
+    go('map');
+  };
+
+  const budget = log.budget;
+  const pct = budget ? Math.round((budget.remaining / budget.limit) * 100) : 100;
 
   return (
-    <>
-      <header className="masthead">
-        <div className="wordmark">ShopMesh<span className="dot">.</span><span className="rid">APIBP002</span></div>
-        <nav className="tabs" role="tablist">
-          {[['browse', 'Browse'], ['nearby', 'Near me'], ['orders', 'My orders']].map(([k, label]) => (
-            <button key={k} role="tab" aria-selected={tab === k} className="tab" onClick={() => setTab(k)}>{label}</button>
+    <div className={`app ${inspectorOpen ? 'with-inspector' : ''}`}>
+      <a className="skip" href="#main">
+        Skip to content
+      </a>
+      <header className="topbar">
+        <a className="brand" href="#/shop" aria-label="ShopMesh home">
+          <span className="brand-mark">
+            <BrandMark />
+          </span>
+          <span className="brand-name">ShopMesh</span>
+          <span className="brand-id">APIBP002</span>
+        </a>
+        <nav className="nav" aria-label="Main">
+          {NAV.map((n) => (
+            <a key={n.key} href={`#/${n.key}`} className={page === n.key ? 'on' : ''} aria-current={page === n.key ? 'page' : undefined}>
+              <Icon name={n.icon} size={16} />
+              <span>{n.label}</span>
+              {n.key === 'admin' && (!session || session.role !== 'admin') && <Icon name="key" size={11} className="lock" />}
+            </a>
           ))}
         </nav>
-        <div className="mast-right">
-          {token
-            ? <><span className="who">Signed in as <b>demo</b></span><button className="ghost" onClick={() => { setToken(null); toast('Signed out'); }}>Sign out</button></>
-            : <button className="solid" onClick={requireLogin}>Sign in</button>}
+        <div className="top-actions">
+          <button
+            type="button"
+            className={`api-pill ${pct < 20 ? 'low' : ''} ${inspectorOpen ? 'on' : ''}`}
+            onClick={() => setInspectorOpen((o) => !o)}
+            aria-pressed={inspectorOpen}
+            title="Every API request this page made, with the live rate-limit budget"
+          >
+            <Icon name="pulse" size={15} />
+            <span>
+              API log <b>{log.calls.length}</b>
+            </span>
+            <span className="api-pill-meter" aria-hidden="true">
+              <i style={{ width: `${pct}%` }} />
+            </span>
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
+          </button>
+          {session ? (
+            <div className="user-chip">
+              <span className="avatar">{session.username.slice(0, 1).toUpperCase()}</span>
+              <span className="user-meta">
+                <b>{session.username}</b>
+                <small className={`role-badge ${session.role}`}>{session.role}</small>
+              </span>
+              <button type="button" className="icon-btn sm" onClick={signOut} aria-label="Sign out">
+                <Icon name="logout" size={15} />
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="btn primary sm" onClick={requireLogin}>
+              <Icon name="user" size={15} /> Sign in
+            </button>
+          )}
         </div>
       </header>
 
-      {tab === 'browse' && <Browse onOpen={setDrawer} cityCounts={cityCounts} total={all.length} />}
-      {tab === 'nearby' && <Nearby onOpen={setDrawer} toast={toast} />}
-      {tab === 'orders' && <Orders token={token} requireLogin={requireLogin} />}
+      <main id="main">
+        {bannerVisible && page === 'shop' && (
+          <ProjectBanner onDismiss={() => { window.sessionStorage.setItem('shopmesh-banner-dismissed', '1'); setBannerVisible(false); }} />
+        )}
+        {page === 'shop' && <Shop onOpen={setDrawer} hubs={hubs} catalogueCount={catalogue.length || null} go={go} />}
+        {page === 'map' && <MapView key={mapFocus ? mapFocus.key : 'default'} hubs={hubs} onOpen={setDrawer} focus={mapFocus} toast={toast} />}
+        {page === 'calendar' && <CalendarView session={session} requireLogin={requireLogin} toast={toast} onOpen={setDrawer} />}
+        {page === 'orders' && <Orders session={session} requireLogin={requireLogin} toast={toast} onOpen={setDrawer} go={go} />}
+        {page === 'admin' && (
+          <Admin session={session} requireLogin={requireLogin} toast={toast} hubs={hubs} onCatalogueChange={loadCatalogue} />
+        )}
+        {page === 'lab' && <Lab products={catalogue} />}
+      </main>
 
-      <footer className="ftr">
-        One service, two APIs — REST <code>/api/v1</code> · GraphQL <code>/graphql</code> · OpenAPI <code>/docs</code>
+      <footer className="footer">
+        <div className="container footer-inner">
+          <div>
+            <div className="footer-brand">
+              ShopMesh <span className="brand-id">APIBP002</span>
+            </div>
+            <p className="muted">
+              Approach A — REST-first with a GraphQL layer. Both APIs call one service core, so behaviour and the 14-code
+              error catalogue stay in parity.
+            </p>
+            <p className={`health ${ready ? ready.status : ''}`}>
+              <span className="live-dot" />
+              {ready
+                ? ready.status === 'ready'
+                  ? `Ready · ${ready.products} products · ${ready.slots} slots`
+                  : 'API not ready'
+                : 'Checking readiness…'}{' '}
+              <code>GET /ready</code>
+            </p>
+          </div>
+          <nav className="footer-links" aria-label="API documentation">
+            <a href="/docs" target="_blank" rel="noreferrer">
+              REST docs (Swagger) <Icon name="external" size={12} />
+            </a>
+            <a href="/openapi.yaml" target="_blank" rel="noreferrer">
+              OpenAPI YAML <Icon name="external" size={12} />
+            </a>
+            <a href="/graphql" target="_blank" rel="noreferrer">
+              GraphQL IDE <Icon name="external" size={12} />
+            </a>
+            <a href="/health" target="_blank" rel="noreferrer">
+              Liveness probe <Icon name="external" size={12} />
+            </a>
+          </nav>
+          <div className="team">
+            <b>Team APIBP002</b>
+            <span>Aadarsh Verma</span>
+            <span>Divyansh Jha</span>
+            <span>Parimita Sarkar</span>
+            <span>Simarpreet Singh</span>
+          </div>
+        </div>
       </footer>
 
-      {drawer && <Drawer product={drawer} token={token} onClose={() => setDrawer(null)} toast={toast} requireLogin={requireLogin} />}
-      {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} onDone={setToken} toast={toast} />}
-
-      <div className="toasts">
-        {toasts.map((t) => <div key={t.id} className={`toast ${t.kind || ''}`}>{t.msg}</div>)}
-      </div>
-    </>
+      {drawer && (
+        <ProductDrawer
+          key={drawer.id}
+          product={drawer}
+          session={session}
+          onClose={closeDrawer}
+          requireLogin={requireLogin}
+          toast={toast}
+          onShowOnMap={showOnMap}
+          go={go}
+        />
+      )}
+      {loginOpen && <LoginModal onClose={closeLogin} onSignedIn={onSignedIn} />}
+      {inspectorOpen && <Inspector log={log} onClose={closeInspector} />}
+      <Toasts items={toasts} dismiss={dismiss} />
+    </div>
   );
 }

@@ -26,7 +26,14 @@ function createLoaders() {
     return productIds.map((id) => grouped.get(id) || []);
   });
 
-  return { productById, slotsByProduct };
+  const slotById = new DataLoader(async (ids) => {
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = db.prepare(`SELECT * FROM slots WHERE id IN (${placeholders})`).all(...ids);
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return ids.map((id) => byId.get(id) || null);
+  });
+
+  return { productById, slotsByProduct, slotById };
 }
 
 module.exports = { createLoaders };
