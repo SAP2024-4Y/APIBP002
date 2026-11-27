@@ -1,9 +1,12 @@
 'use strict';
 
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const config = require('../config');
 const { AppError } = require('../errors');
 const { getDb } = require('../db/client');
+
+const SALT_ROUNDS = 10;
 
 function issueToken(username, password) {
   // Check hardcoded demo accounts first, then registered users in DB.
@@ -21,7 +24,7 @@ function issueToken(username, password) {
 
   const db = getDb();
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
-  if (!user || user.password !== password) throw new AppError('INVALID_CREDENTIALS');
+  if (!user || !bcrypt.compareSync(password, user.password)) throw new AppError('INVALID_CREDENTIALS');
   const token = jwt.sign(
     { sub: user.username, role: user.role },
     config.jwtSecret,
@@ -41,11 +44,18 @@ function registerUser(username, password, email) {
   // Block registering over demo accounts
   const reserved = config.accounts.find((a) => a.username === username);
   if (reserved) throw new AppError('CONFLICT', 'Username is already taken.');
-  const existing = db.prepare('SELECT username FROM users WHERE username = ?').get(username);
-  if (existing) throw new AppError('CONFLICT', 'Username is already taken.');
-  db.prepare(
-    'INSERT INTO users (username, password, role, email, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(username, password, 'customer', email || null, new Date().toISOString());
+
+  const hash = bcrypt.hashSync(password, SALT_ROUNDS);
+  try {
+    db.prepare(
+      'INSERT INTO users (username, password, role, email, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(username, hash, 'customer', email || null, new Date().toISOString());
+  } catch (err) {
+    if (err.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' || (err.message && err.message.includes('UNIQUE'))) {
+      throw new AppError('CONFLICT', 'Username is already taken.');
+    }
+    throw err;
+  }
   return issueToken(username, password);
 }
 

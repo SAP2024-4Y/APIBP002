@@ -72,25 +72,7 @@ function createBooking({ slotId, quantity = 1, username }) {
 
   const slot = getSlotById(slotId);
 
-  if (slot.booked + qty > slot.capacity) {
-    const alternatives = db
-      .prepare(
-        `SELECT id, starts_at, ends_at, capacity - booked AS available FROM slots
-         WHERE product_id = ? AND id != ? AND capacity - booked >= ? AND starts_at > ?
-         ORDER BY starts_at ASC, id ASC LIMIT 3`
-      )
-      .all(slot.product_id, slot.id, qty, new Date().toISOString())
-      .map((a) => ({ slot_id: a.id, starts_at: a.starts_at, ends_at: a.ends_at, available: a.available }));
-    throw new AppError(
-      'SLOT_FULL',
-      `Only ${slot.capacity - slot.booked} unit(s) remain in this slot.`,
-      { slot_id: slot.id, requested: qty, available: slot.capacity - slot.booked, alternatives },
-      alternatives.length
-        ? undefined
-        : 'No other upcoming slot for this product can take that quantity. Lower the quantity or choose another product.'
-    );
-  }
-
+  // Check overlap before entering the transaction (read-only, no race risk here).
   const overlap = db
     .prepare(
       `SELECT b.id, b.slot_id FROM bookings b
@@ -114,11 +96,39 @@ function createBooking({ slotId, quantity = 1, username }) {
     created_at: new Date().toISOString(),
   };
 
+  // Atomic capacity guard: UPDATE only succeeds when capacity is not exceeded.
+  // If the UPDATE touches 0 rows, another request won the race — return SLOT_FULL.
   const tx = db.transaction(() => {
+    const updated = db
+      .prepare(
+        'UPDATE slots SET booked = booked + ? WHERE id = ? AND booked + ? <= capacity'
+      )
+      .run(qty, slot.id, qty);
+
+    if (updated.changes === 0) {
+      // Re-read to build a fresh alternatives list.
+      const fresh = db.prepare('SELECT * FROM slots WHERE id = ?').get(slot.id);
+      const alternatives = db
+        .prepare(
+          `SELECT id, starts_at, ends_at, capacity - booked AS available FROM slots
+           WHERE product_id = ? AND id != ? AND capacity - booked >= ? AND starts_at > ?
+           ORDER BY starts_at ASC, id ASC LIMIT 3`
+        )
+        .all(fresh.product_id, fresh.id, qty, new Date().toISOString())
+        .map((a) => ({ slot_id: a.id, starts_at: a.starts_at, ends_at: a.ends_at, available: a.available }));
+      throw new AppError(
+        'SLOT_FULL',
+        `Only ${fresh.capacity - fresh.booked} unit(s) remain in this slot.`,
+        { slot_id: fresh.id, requested: qty, available: fresh.capacity - fresh.booked, alternatives },
+        alternatives.length
+          ? undefined
+          : 'No other upcoming slot for this product can take that quantity. Lower the quantity or choose another product.'
+      );
+    }
+
     db.prepare(
       'INSERT INTO bookings (id, slot_id, username, quantity, created_at) VALUES (?, ?, ?, ?, ?)'
     ).run(booking.id, booking.slot_id, booking.username, booking.quantity, booking.created_at);
-    db.prepare('UPDATE slots SET booked = booked + ? WHERE id = ?').run(qty, slot.id);
   });
   tx();
 

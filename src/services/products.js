@@ -14,7 +14,7 @@ const SORT_COLUMNS = {
   created_at: 'created_at',
 };
 const STATUSES = ['active', 'out_of_stock', 'discontinued'];
-const CATEGORIES = ['Electronics', 'Fashion', 'Home & Kitchen', 'Books', 'Grocery', 'Sports', 'Beauty'];
+const CATEGORIES = ['Electronics', 'Fashion', 'Home & Kitchen', 'Books', 'Grocery', 'Sports', 'Beauty', 'Toys & Games', 'Health & Wellness'];
 
 // Category is a closed enum; matching is case-insensitive and returns the canonical spelling.
 function normalizeCategory(value) {
@@ -190,7 +190,7 @@ function createProduct(input = {}) {
   }
   const rating = parseRating(input.rating);
   const inventory = input.inventory === undefined ? 0 : Number(input.inventory);
-  if (!Number.isFinite(inventory) || inventory < 0) {
+  if (!Number.isInteger(inventory) || inventory < 0) {
     throw new AppError('UNPROCESSABLE', 'inventory must be a non-negative integer.');
   }
   const row = {

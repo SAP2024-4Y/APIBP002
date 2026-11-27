@@ -534,7 +534,7 @@ components:
     Category:
       type: string
       description: Closed product category enum (input matching is case-insensitive).
-      enum: [Electronics, Fashion, Home & Kitchen, Books, Grocery, Sports, Beauty]
+      enum: [Electronics, Fashion, Home & Kitchen, Books, Grocery, Sports, Beauty, Toys & Games, Health & Wellness]
     GeoLocation:
       type: object
       properties:
@@ -630,6 +630,7 @@ components:
                 - SLOT_NOT_FOUND
                 - SLOT_FULL
                 - BOOKING_OVERLAP
+                - CONFLICT
                 - UNPROCESSABLE
                 - INVALID_COORDINATES
                 - RATE_LIMITED

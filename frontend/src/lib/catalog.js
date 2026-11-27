@@ -1,5 +1,5 @@
 // Mirrors the closed enums documented in docs/openapi.yaml (Category, status).
-export const CATEGORIES = ['Electronics', 'Fashion', 'Home & Kitchen', 'Books', 'Grocery', 'Sports', 'Beauty'];
+export const CATEGORIES = ['Electronics', 'Fashion', 'Home & Kitchen', 'Books', 'Grocery', 'Sports', 'Beauty', 'Toys & Games', 'Health & Wellness'];
 
 export const STATUSES = [
   { value: 'active', label: 'Active' },
@@ -25,6 +25,8 @@ const CATEGORY_STYLE = {
   Grocery: { icon: '🧺', hue: 42 },
   Sports: { icon: '🏸', hue: 185 },
   Beauty: { icon: '✨', hue: 330 },
+  'Toys & Games': { icon: '🧸', hue: 55 },
+  'Health & Wellness': { icon: '💊', hue: 160 },
 };
 
 export const categoryStyle = (c) => CATEGORY_STYLE[c] || { icon: '🛍️', hue: 32 };
