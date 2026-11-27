@@ -51,6 +51,7 @@ const CATALOGUE = {
     hint: 'Choose a different username or identifier and try again.',
   },
   SLOT_FULL: {
+    status: 409,
     message: 'The delivery slot has no remaining capacity.',
     hint: 'Pick another slot (details.alternatives lists open slots for the same product) or lower the quantity.',
   },
