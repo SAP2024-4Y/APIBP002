@@ -15,6 +15,8 @@ export default defineConfig({
       '/graphql': backend,
       '/health': backend,
       '/ready': backend,
+      '/docs': backend,
+      '/openapi.yaml': backend,
     },
   },
   build: { outDir: 'dist' },

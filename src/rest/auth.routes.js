@@ -1,7 +1,7 @@
 'use strict';
 
 const express = require('express');
-const { issueToken } = require('../auth/jwt');
+const { issueToken, registerUser } = require('../auth/jwt');
 const { AppError } = require('../errors');
 
 const router = express.Router();
@@ -19,6 +19,26 @@ router.post('/token', (req, res, next) => {
       token_type: result.tokenType,
       expires_in: result.expiresIn,
       role: result.role,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/v1/auth/register  — create a new customer account
+router.post('/register', (req, res, next) => {
+  try {
+    const { username, password, email } = req.body || {};
+    if (!username || !password) {
+      throw new AppError('VALIDATION_ERROR', 'username and password are required.');
+    }
+    const result = registerUser(username, password, email);
+    res.status(201).json({
+      token: result.token,
+      token_type: result.tokenType,
+      expires_in: result.expiresIn,
+      role: result.role,
+      message: 'Account created successfully.',
     });
   } catch (err) {
     next(err);

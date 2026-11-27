@@ -3,19 +3,25 @@ ShopMesh GraphQL schema (APIBP002).
 Approach A: this schema is a thin, strongly-typed layer over the same domain
 services that back the REST API. The committed SDL is authoritative and is
 loaded verbatim by the running server at /graphql.
+
+Roles: public operations need no token; customer/admin operations need an
+`Authorization: Bearer <token>` header from requestToken. Errors carry the same
+`extensions.code` as the REST error catalogue, plus `extensions.hint` (what to do
+next) and, for conflicts, `extensions.details`.
 """
 
 scalar DateTime
 
 type Query {
-  "Fetch a single product by id."
+  "Fetch a single product by id. Role: public."
   product(id: ID!): Product
 
-  "List API — filtering, sorting, and Relay-style cursor pagination."
+  "List API — filtering, sorting, and Relay-style cursor pagination (first: default 20, max 100). Role: public."
   products(
     first: Int = 20
     after: String
     status: ProductStatus
+    "One of: Electronics, Fashion, Home & Kitchen, Books, Grocery, Sports, Beauty (case-insensitive)."
     category: String
     q: String
     minPrice: Float
@@ -24,27 +30,27 @@ type Query {
     order: SortOrder = DESC
   ): ProductConnection!
 
-  "Map API — proximity (radius) search. GeoJSON order is [longitude, latitude]."
+  "Map API — proximity (radius) search. GeoJSON order is [longitude, latitude]. Role: public."
   productsNear(latitude: Float!, longitude: Float!, radiusKm: Float!): [ProductHit!]!
 
-  "Map API — bounding-box search (SW + NE corners)."
+  "Map API — bounding-box search (SW + NE corners). Role: public."
   productsInBounds(minLat: Float!, minLon: Float!, maxLat: Float!, maxLon: Float!): [Product!]!
 
-  "Calendar API — delivery slots overlapping an optional [startsAt, endsAt] window."
+  "Calendar API — delivery slots overlapping an optional [startsAt, endsAt] ISO-8601 UTC window. Role: public."
   slots(productId: ID, startsAt: DateTime, endsAt: DateTime): [Slot!]!
 
-  "Bookings owned by the authenticated caller."
+  "Bookings owned by the authenticated caller. Role: customer or admin."
   myBookings: [Booking!]!
 }
 
 type Mutation {
-  "Issue a JWT for a demo account. Mirrors POST /api/v1/auth/token."
+  "Issue a JWT for a demo account. Mirrors POST /api/v1/auth/token. Role: public."
   requestToken(username: String!, password: String!): AuthPayload!
 
-  "Book a delivery slot. Fails with extensions.code SLOT_FULL / BOOKING_OVERLAP on conflict."
+  "Book a delivery slot. Fails with extensions.code SLOT_FULL / BOOKING_OVERLAP on conflict. Role: customer or admin."
   bookSlot(slotId: ID!, quantity: Int! = 1): Booking!
 
-  "Cancel a booking you own, releasing the slot capacity. Mirrors DELETE /api/v1/bookings/:id."
+  "Cancel a booking you own, releasing the slot capacity. Mirrors DELETE /api/v1/bookings/:id. Role: customer or admin (owner only)."
   cancelBooking(bookingId: ID!): CancelResult!
 }
 
@@ -76,6 +82,7 @@ type Product {
   priceInPaise: Int!
   "Rupee price as a float. Deprecated: use priceInPaise to avoid float rounding."
   price: Float! @deprecated(reason: "Use priceInPaise for exact integer currency handling; price is a lossy float.")
+  "ISO 4217 currency code of the price, e.g. INR."
   currency: String!
   status: ProductStatus!
   seller: String
@@ -129,6 +136,8 @@ type Slot {
 type Booking {
   id: ID!
   slotId: ID!
+  "The reserved delivery slot (and through it the product), batched via DataLoader."
+  slot: Slot!
   user: String!
   quantity: Int!
   createdAt: DateTime!

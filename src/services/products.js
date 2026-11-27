@@ -14,12 +14,32 @@ const SORT_COLUMNS = {
   created_at: 'created_at',
 };
 const STATUSES = ['active', 'out_of_stock', 'discontinued'];
+const CATEGORIES = ['Electronics', 'Fashion', 'Home & Kitchen', 'Books', 'Grocery', 'Sports', 'Beauty'];
+
+// Category is a closed enum; matching is case-insensitive and returns the canonical spelling.
+function normalizeCategory(value) {
+  const wanted = String(value).trim().toLowerCase();
+  const match = CATEGORIES.find((c) => c.toLowerCase() === wanted);
+  if (!match) {
+    throw new AppError('VALIDATION_ERROR', `category must be one of: ${CATEGORIES.join(', ')}.`);
+  }
+  return match;
+}
 
 function parsePrice(value, label) {
   if (value === undefined || value === null || value === '') return null;
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) {
     throw new AppError('VALIDATION_ERROR', `${label} must be a non-negative number (in INR).`);
+  }
+  return n;
+}
+
+function parseRating(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0 || n > 5) {
+    throw new AppError('UNPROCESSABLE', 'rating must be a number between 0 and 5.');
   }
   return n;
 }
@@ -37,7 +57,7 @@ function buildBaseFilters(params) {
   }
   if (params.category !== undefined && params.category !== '') {
     where.push('category = ?');
-    args.push(params.category);
+    args.push(normalizeCategory(params.category));
   }
   if (params.q !== undefined && params.q !== '') {
     where.push('(name LIKE ? OR description LIKE ?)');
@@ -155,6 +175,7 @@ function createProduct(input = {}) {
   for (const field of ['name', 'category', 'status']) {
     if (!input[field]) throw new AppError('VALIDATION_ERROR', `${field} is required.`);
   }
+  const category = normalizeCategory(input.category);
   if (!STATUSES.includes(input.status)) {
     throw new AppError('VALIDATION_ERROR', `status must be one of: ${STATUSES.join(', ')}.`);
   }
@@ -167,17 +188,22 @@ function createProduct(input = {}) {
   if (!isValidLon(lon) || !isValidLat(lat)) {
     throw new AppError('INVALID_COORDINATES', 'longitude/latitude are required and must be valid.');
   }
+  const rating = parseRating(input.rating);
+  const inventory = input.inventory === undefined ? 0 : Number(input.inventory);
+  if (!Number.isFinite(inventory) || inventory < 0) {
+    throw new AppError('UNPROCESSABLE', 'inventory must be a non-negative integer.');
+  }
   const row = {
     id: newId('prod'),
     name: input.name,
     description: input.description || null,
-    category: input.category,
+    category,
     price_paise: Math.round(price * 100),
     currency: input.currency || 'INR',
     status: input.status,
     seller: input.seller || null,
-    rating: input.rating === undefined ? null : Number(input.rating),
-    inventory: input.inventory === undefined ? 0 : Math.max(0, Math.trunc(Number(input.inventory) || 0)),
+    rating,
+    inventory: Math.trunc(inventory),
     longitude: lon,
     latitude: lat,
     created_at: new Date().toISOString(),
@@ -201,7 +227,7 @@ function updateProduct(id, patch = {}) {
 
   if (patch.name !== undefined) put('name', String(patch.name));
   if (patch.description !== undefined) put('description', patch.description === null ? null : String(patch.description));
-  if (patch.category !== undefined) put('category', String(patch.category));
+  if (patch.category !== undefined) put('category', normalizeCategory(patch.category));
   if (patch.seller !== undefined) put('seller', patch.seller === null ? null : String(patch.seller));
   if (patch.status !== undefined) {
     if (!STATUSES.includes(patch.status)) throw new AppError('VALIDATION_ERROR', `status must be one of: ${STATUSES.join(', ')}.`);
@@ -212,7 +238,7 @@ function updateProduct(id, patch = {}) {
     if (!Number.isFinite(price) || price < 0) throw new AppError('UNPROCESSABLE', 'price must be a non-negative number.');
     put('price_paise', Math.round(price * 100));
   }
-  if (patch.rating !== undefined) put('rating', patch.rating === null ? null : Number(patch.rating));
+  if (patch.rating !== undefined) put('rating', parseRating(patch.rating));
   if (patch.inventory !== undefined) {
     const inv = Number(patch.inventory);
     if (!Number.isFinite(inv) || inv < 0) throw new AppError('UNPROCESSABLE', 'inventory must be a non-negative integer.');
@@ -256,4 +282,5 @@ module.exports = {
   deleteProduct,
   SORT_COLUMNS,
   STATUSES,
+  CATEGORIES,
 };

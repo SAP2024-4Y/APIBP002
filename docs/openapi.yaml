@@ -2,11 +2,43 @@ openapi: 3.0.3
 info:
   title: ShopMesh API (APIBP002)
   version: 1.0.0
-  description: >
+  description: |
     Dual REST + GraphQL API for an online shopping domain. This OpenAPI document
     describes the REST surface; the GraphQL schema is served at `/graphql` and
     committed at `docs/schema.graphql`. All business endpoints are versioned
     under `/api/v1`.
+
+    ## Roles (actors)
+    OpenAPI has no native roles field, so every operation states the role(s)
+    allowed to call it at the start of its description and in `x-roles`.
+
+    | Role | Actor | Authentication |
+    |------|-------|----------------|
+    | `public` | Any shopper or partner integration | none |
+    | `customer` | Signed-in shopper (demo account `demo`) | `Authorization: Bearer <token>` |
+    | `admin` | Catalogue manager (demo account `admin`) | `Authorization: Bearer <token>` |
+
+    A missing or invalid token returns `401 UNAUTHENTICATED`; a valid token
+    lacking the role returns `403 FORBIDDEN`.
+
+    ## Standards
+    - **Timestamps:** ISO 8601 in UTC (`Z` suffix), e.g. `2026-12-01T09:00:00Z`.
+    - **Money:** integer minor units (`price_paise`) plus an ISO 4217 `currency` code (`INR`).
+    - **Coordinates:** GeoJSON (RFC 7946) points, `coordinates: [longitude, latitude]`, WGS 84 degrees.
+    - **Rate limits:** `RateLimit-Limit` / `RateLimit-Remaining` / `RateLimit-Reset` headers (IETF draft) and `Retry-After` on 429.
+
+    ## Pagination
+    The List API uses opaque keyset cursors only (no page numbers or offsets).
+    `limit` defaults to 20, minimum 1, maximum 100 (larger values are capped at
+    100). Each page returns `has_more`, `next_cursor` (pass it back as `after`)
+    and `total_count` (all matches for the filters). Map and Calendar searches
+    return every match in a single response.
+
+    ## Errors
+    Every error body is `{ "error": { "code", "message", "hint", "details"? } }`.
+    `code` is one of the 14 catalogue codes, `message` says what went wrong and
+    `hint` says what to do next. Conflicts add machine-readable `details`
+    (for example `SLOT_FULL` lists alternative open slots).
   license:
     name: MIT
 servers:
@@ -14,15 +46,24 @@ servers:
     description: Local container (docker compose up)
 tags:
   - name: Health
+    description: Liveness and readiness probes.
   - name: Auth
+    description: Exchange demo credentials for a JWT.
   - name: Products (List)
+    description: Catalogue discovery (public) and curation (admin).
   - name: Products (Map)
+    description: Geospatial search over fulfilment hubs.
   - name: Calendar
+    description: Delivery slots and bookings.
+  - name: Admin
+    description: Back-office metrics.
 paths:
   /health:
     get:
       tags: [Health]
       summary: Liveness probe
+      description: '**Roles:** public (no token).'
+      x-roles: [public]
       security: []
       responses:
         '200':
@@ -35,10 +76,40 @@ paths:
                   status: { type: string, example: ok }
                   service: { type: string, example: shopmesh }
                   time: { type: string, format: date-time }
+  /ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe (database seeded and queryable)
+      description: '**Roles:** public (no token). Returns 503 while the database is not answering.'
+      x-roles: [public]
+      security: []
+      responses:
+        '200':
+          description: Ready to serve traffic
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ready }
+                  products: { type: integer, example: 24 }
+                  slots: { type: integer, example: 73 }
+        '503':
+          description: Database not answering
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: not_ready }
   /api/v1/auth/token:
     post:
       tags: [Auth]
       summary: Issue a JWT for a demo account
+      description: >
+        **Roles:** public (no token). Demo accounts are `demo` / `demo-password`
+        (customer) and `admin` / `admin-password` (admin). Tokens expire after 2h.
+      x-roles: [public]
       security: []
       requestBody:
         required: true
@@ -65,10 +136,49 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new customer account
+      description: >
+        **Roles:** public (no token). Creates a new `customer` account and immediately
+        returns a JWT so the caller is signed in. Username must be ≥ 3 chars,
+        password ≥ 6 chars. Returns `409 CONFLICT` if the username is taken.
+      x-roles: [public]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, minLength: 3, example: alice }
+                password: { type: string, minLength: 6, example: secret123 }
+                email: { type: string, format: email, example: alice@example.com }
+      responses:
+        '201':
+          description: Account created and token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  token_type: { type: string, example: Bearer }
+                  expires_in: { type: string, example: 2h }
+                  role: { type: string, example: customer }
+                  message: { type: string, example: Account created successfully. }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
   /api/v1/admin/stats:
     get:
       tags: [Admin]
       summary: Catalogue + booking metrics (admin role required)
+      description: '**Roles:** admin.'
+      x-roles: [admin]
       security: [{ bearerAuth: [] }]
       responses:
         '200':
@@ -94,17 +204,52 @@ paths:
     get:
       tags: [Products (List)]
       summary: List products with filtering, sorting, and cursor pagination
+      description: >
+        **Roles:** public (no token). Filters combine with AND. Results are
+        ordered by `sort` in the `order` direction with `id` as a tie-breaker,
+        so keyset pages never skip or repeat rows.
+      x-roles: [public]
       security: []
       parameters:
-        - { in: query, name: status, schema: { type: string, enum: [active, out_of_stock, discontinued] } }
-        - { in: query, name: category, schema: { type: string } }
-        - { in: query, name: q, schema: { type: string }, description: Full-text match on name/description }
-        - { in: query, name: min_price, schema: { type: number }, description: Minimum price in INR }
-        - { in: query, name: max_price, schema: { type: number }, description: Maximum price in INR }
-        - { in: query, name: sort, schema: { type: string, enum: [id, name, price, rating, created_at], default: created_at } }
-        - { in: query, name: order, schema: { type: string, enum: [asc, desc], default: desc } }
-        - { in: query, name: limit, schema: { type: integer, default: 20, minimum: 1, maximum: 100 } }
-        - { in: query, name: after, schema: { type: string }, description: Opaque keyset cursor from a prior response }
+        - in: query
+          name: status
+          description: Lifecycle status filter.
+          schema: { type: string, enum: [active, out_of_stock, discontinued] }
+        - in: query
+          name: category
+          description: Category filter (closed enum, case-insensitive). Unknown values return 400 VALIDATION_ERROR.
+          schema: { $ref: '#/components/schemas/Category' }
+        - in: query
+          name: q
+          description: Case-insensitive substring match on name or description.
+          schema: { type: string }
+        - in: query
+          name: min_price
+          description: Minimum price in rupees (INR), inclusive.
+          schema: { type: number, minimum: 0 }
+        - in: query
+          name: max_price
+          description: Maximum price in rupees (INR), inclusive.
+          schema: { type: number, minimum: 0 }
+        - in: query
+          name: sort
+          description: Field to order by; `id` is always appended as a tie-breaker.
+          schema: { type: string, enum: [id, name, price, rating, created_at], default: created_at }
+        - in: query
+          name: order
+          description: Direction for `sort` and the `id` tie-breaker.
+          schema: { type: string, enum: [asc, desc], default: desc }
+        - in: query
+          name: limit
+          description: >
+            Maximum products in this page. Default 20 when omitted; minimum 1
+            (0, negatives and non-integers return 400); maximum 100 (larger
+            values are capped at 100).
+          schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
+        - in: query
+          name: after
+          description: Opaque keyset cursor; pass `next_cursor` from the previous page unchanged. Malformed values return 400 INVALID_CURSOR.
+          schema: { type: string }
       responses:
         '200':
           description: A page of products
@@ -114,9 +259,10 @@ paths:
                 type: object
                 properties:
                   data: { type: array, items: { $ref: '#/components/schemas/Product' } }
-                  has_more: { type: boolean }
-                  next_cursor: { type: string, nullable: true }
-                  limit: { type: integer }
+                  has_more: { type: boolean, description: True when more products match beyond this page. }
+                  next_cursor: { type: string, nullable: true, description: Pass as `after` for the next page; null on the last page. }
+                  total_count: { type: integer, description: Products matching the filters across all pages. }
+                  limit: { type: integer, description: Effective page size after defaulting and capping. }
                   sort: { type: string }
                   order: { type: string }
         '400': { $ref: '#/components/responses/ValidationError' }
@@ -124,6 +270,8 @@ paths:
     post:
       tags: [Products (List)]
       summary: Create a product (admin role required)
+      description: '**Roles:** admin. A valid customer token receives 403 FORBIDDEN.'
+      x-roles: [admin]
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -149,18 +297,22 @@ paths:
       tags: [Products (Map)]
       summary: Geospatial search — proximity (radius) OR bounding box
       description: >
-        Provide either (latitude, longitude, radius_km) for a proximity search,
-        or (min_lat, min_lon, max_lat, max_lon) for a bounding-box search.
-        Coordinates follow GeoJSON order [longitude, latitude].
+        **Roles:** public (no token). Provide either (latitude, longitude,
+        radius_km) for a proximity search, or (min_lat, min_lon, max_lat,
+        max_lon) for a bounding-box search. The client supplies its own
+        position; the server never infers location. Radius results are sorted by
+        distance, box results by id, and all matches are returned in one
+        response. Coordinates follow GeoJSON order [longitude, latitude].
+      x-roles: [public]
       security: []
       parameters:
-        - { in: query, name: latitude, schema: { type: number } }
-        - { in: query, name: longitude, schema: { type: number } }
-        - { in: query, name: radius_km, schema: { type: number }, description: Radius in kilometres }
-        - { in: query, name: min_lat, schema: { type: number }, description: SW corner latitude }
-        - { in: query, name: min_lon, schema: { type: number }, description: SW corner longitude }
-        - { in: query, name: max_lat, schema: { type: number }, description: NE corner latitude }
-        - { in: query, name: max_lon, schema: { type: number }, description: NE corner longitude }
+        - { in: query, name: latitude, description: Centre latitude in WGS 84 degrees, schema: { type: number, minimum: -90, maximum: 90 } }
+        - { in: query, name: longitude, description: Centre longitude in WGS 84 degrees, schema: { type: number, minimum: -180, maximum: 180 } }
+        - { in: query, name: radius_km, description: Radius in kilometres (must be greater than 0), schema: { type: number, minimum: 0, exclusiveMinimum: true } }
+        - { in: query, name: min_lat, description: SW corner latitude, schema: { type: number, minimum: -90, maximum: 90 } }
+        - { in: query, name: min_lon, description: SW corner longitude, schema: { type: number, minimum: -180, maximum: 180 } }
+        - { in: query, name: max_lat, description: NE corner latitude, schema: { type: number, minimum: -90, maximum: 90 } }
+        - { in: query, name: max_lon, description: NE corner longitude, schema: { type: number, minimum: -180, maximum: 180 } }
       responses:
         '200':
           description: Matching products
@@ -186,6 +338,8 @@ paths:
     get:
       tags: [Products (List)]
       summary: Fetch a single product
+      description: '**Roles:** public (no token).'
+      x-roles: [public]
       security: []
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -200,6 +354,8 @@ paths:
     patch:
       tags: [Products (List)]
       summary: Update a product (admin role required)
+      description: '**Roles:** admin. Send only the fields to change; at least one is required.'
+      x-roles: [admin]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -207,7 +363,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ProductInput' }
+            schema: { $ref: '#/components/schemas/ProductPatch' }
       responses:
         '200':
           description: Product updated
@@ -217,6 +373,7 @@ paths:
                 type: object
                 properties:
                   updated: { $ref: '#/components/schemas/Product' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -224,6 +381,8 @@ paths:
     delete:
       tags: [Products (List)]
       summary: Delete a product and its slots/bookings (admin role required)
+      description: '**Roles:** admin. Cascades to the product''s slots and their bookings in one transaction.'
+      x-roles: [admin]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -244,11 +403,13 @@ paths:
     get:
       tags: [Calendar]
       summary: Delivery slots for one product within an optional window
+      description: '**Roles:** public (no token). Window bounds are ISO 8601 UTC; a slot matches if it overlaps the window.'
+      x-roles: [public]
       security: []
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
-        - { in: query, name: starts_at, schema: { type: string, format: date-time } }
-        - { in: query, name: ends_at, schema: { type: string, format: date-time } }
+        - { in: query, name: starts_at, description: ISO 8601 UTC window start, schema: { type: string, format: date-time } }
+        - { in: query, name: ends_at, description: ISO 8601 UTC window end (must be after starts_at), schema: { type: string, format: date-time } }
       responses:
         '200':
           description: Slots
@@ -265,11 +426,16 @@ paths:
     get:
       tags: [Calendar]
       summary: Time-window slot search across all products
+      description: >
+        **Roles:** public (no token). Returns every slot overlapping the window
+        (slot.starts_at < ends_at AND slot.ends_at > starts_at), ordered by
+        start time. Either bound may be omitted for an open-ended window.
+      x-roles: [public]
       security: []
       parameters:
         - { in: query, name: product_id, schema: { type: string } }
-        - { in: query, name: starts_at, schema: { type: string, format: date-time }, description: ISO-8601 UTC window start }
-        - { in: query, name: ends_at, schema: { type: string, format: date-time }, description: ISO-8601 UTC window end }
+        - { in: query, name: starts_at, schema: { type: string, format: date-time }, description: ISO 8601 UTC window start }
+        - { in: query, name: ends_at, schema: { type: string, format: date-time }, description: ISO 8601 UTC window end (must be after starts_at) }
       responses:
         '200':
           description: Slots overlapping the window
@@ -285,6 +451,8 @@ paths:
     get:
       tags: [Calendar]
       summary: List the authenticated caller's bookings
+      description: '**Roles:** customer, admin (own bookings only).'
+      x-roles: [customer, admin]
       security: [{ bearerAuth: [] }]
       responses:
         '200':
@@ -300,6 +468,12 @@ paths:
     post:
       tags: [Calendar]
       summary: Book a delivery slot (conflict-aware)
+      description: >
+        **Roles:** customer, admin. Returns 409 SLOT_FULL when the slot cannot
+        absorb the quantity (with alternative open slots in `details`) and 409
+        BOOKING_OVERLAP when the caller already holds a booking in an
+        overlapping window (with the conflicting booking id in `details`).
+      x-roles: [customer, admin]
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -309,7 +483,7 @@ paths:
               type: object
               required: [slot_id]
               properties:
-                slot_id: { type: string }
+                slot_id: { type: string, example: slot_002_1 }
                 quantity: { type: integer, default: 1, minimum: 1 }
       responses:
         '201':
@@ -330,6 +504,8 @@ paths:
     delete:
       tags: [Calendar]
       summary: Cancel an owned booking (releases slot capacity)
+      description: '**Roles:** customer, admin (owner only; cancelling someone else''s booking returns 403).'
+      x-roles: [customer, admin]
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
@@ -355,6 +531,10 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    Category:
+      type: string
+      description: Closed product category enum (input matching is case-insensitive).
+      enum: [Electronics, Fashion, Home & Kitchen, Books, Grocery, Sports, Beauty]
     GeoLocation:
       type: object
       properties:
@@ -371,54 +551,70 @@ components:
         id: { type: string }
         name: { type: string }
         description: { type: string, nullable: true }
-        category: { type: string }
-        price: { type: number, description: Rupee price (float, convenience) }
-        price_paise: { type: integer, description: Authoritative integer price in paise }
-        currency: { type: string, example: INR }
+        category: { $ref: '#/components/schemas/Category' }
+        price: { type: number, deprecated: true, description: Convenience rupee price as a float (price_paise / 100). Use price_paise. }
+        price_paise: { type: integer, description: Authoritative price in minor units (paise) of `currency`. }
+        currency: { type: string, example: INR, description: ISO 4217 alphabetic currency code. }
         status: { type: string, enum: [active, out_of_stock, discontinued] }
-        seller: { type: string, nullable: true }
-        rating: { type: number, nullable: true }
+        seller: { type: string, nullable: true, description: Fulfilment hub that ships the product. }
+        rating: { type: number, nullable: true, minimum: 0, maximum: 5 }
         inventory: { type: integer, description: Units currently in stock }
         location: { $ref: '#/components/schemas/GeoLocation' }
-        created_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time, description: ISO 8601 UTC timestamp. }
     ProductInput:
       type: object
       required: [name, category, status, price, latitude, longitude]
       properties:
-        name: { type: string }
+        name: { type: string, example: Monsoon Trek Backpack }
         description: { type: string }
-        category: { type: string }
+        category: { $ref: '#/components/schemas/Category' }
+        status: { type: string, enum: [active, out_of_stock, discontinued], example: active }
+        price: { type: number, minimum: 0, example: 2499, description: Rupee price (INR); stored as integer paise. }
+        currency: { type: string, default: INR, description: ISO 4217 currency code. }
+        seller: { type: string, example: Pune Fulfilment Hub }
+        rating: { type: number, minimum: 0, maximum: 5, example: 4.5 }
+        inventory: { type: integer, minimum: 0, default: 0, example: 40, description: Units in stock }
+        latitude: { type: number, minimum: -90, maximum: 90, example: 18.5204 }
+        longitude: { type: number, minimum: -180, maximum: 180, example: 73.8567 }
+    ProductPatch:
+      type: object
+      minProperties: 1
+      description: Partial update; only the supplied fields change.
+      properties:
+        name: { type: string }
+        description: { type: string, nullable: true }
+        category: { $ref: '#/components/schemas/Category' }
         status: { type: string, enum: [active, out_of_stock, discontinued] }
-        price: { type: number, description: Rupee price }
-        currency: { type: string, default: INR }
-        seller: { type: string }
-        rating: { type: number }
-        inventory: { type: integer, default: 0, description: Units in stock }
-        latitude: { type: number }
-        longitude: { type: number }
+        price: { type: number, minimum: 0, description: Rupee price (INR). }
+        seller: { type: string, nullable: true }
+        rating: { type: number, nullable: true, minimum: 0, maximum: 5 }
+        inventory: { type: integer, minimum: 0 }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
     Slot:
       type: object
       properties:
         id: { type: string }
         product_id: { type: string }
-        starts_at: { type: string, format: date-time }
-        ends_at: { type: string, format: date-time }
+        starts_at: { type: string, format: date-time, description: Window start (ISO 8601 UTC). }
+        ends_at: { type: string, format: date-time, description: Window end (ISO 8601 UTC). }
         capacity: { type: integer }
         booked: { type: integer }
-        available: { type: integer }
+        available: { type: integer, description: capacity minus booked }
     Booking:
       type: object
       properties:
         id: { type: string }
         slot_id: { type: string }
         user: { type: string }
-        quantity: { type: integer }
-        created_at: { type: string, format: date-time }
+        quantity: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time, description: ISO 8601 UTC timestamp. }
     Error:
       type: object
       properties:
         error:
           type: object
+          required: [code, message, hint]
           properties:
             code:
               type: string
@@ -438,8 +634,15 @@ components:
                 - INVALID_COORDINATES
                 - RATE_LIMITED
                 - INTERNAL
-            message: { type: string }
-            details: { type: object, nullable: true }
+            message: { type: string, description: What went wrong. }
+            hint: { type: string, description: What the caller should do next. }
+            details:
+              type: object
+              nullable: true
+              description: >
+                Machine-readable context. SLOT_FULL adds slot_id, requested,
+                available and alternatives[] (open slots for the same product);
+                BOOKING_OVERLAP adds conflicting_booking_id and conflicting_slot_id.
   responses:
     ValidationError:
       description: Malformed request (VALIDATION_ERROR, INVALID_CURSOR)
@@ -466,6 +669,17 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error:
+              code: SLOT_FULL
+              message: Only 0 unit(s) remain in this slot.
+              hint: Pick another slot (details.alternatives lists open slots for the same product) or lower the quantity.
+              details:
+                slot_id: slot_full_demo
+                requested: 1
+                available: 0
+                alternatives:
+                  - { slot_id: slot_001_1, starts_at: '2026-12-01T09:00:00.000Z', ends_at: '2026-12-01T12:00:00.000Z', available: 5 }
     Unprocessable:
       description: Semantically invalid (UNPROCESSABLE, INVALID_COORDINATES)
       content:

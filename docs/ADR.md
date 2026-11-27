@@ -71,8 +71,8 @@ queries collapse to one `IN (...)` query per level.
 
 - **List** → the product catalogue: `GET /api/v1/products` and the `products`
   Connection, with `status`/`category`/`min_price`/`max_price`, `sort`+`order`,
-  and opaque keyset cursors (`limit`/`after` + `has_more`; `first`/`after` +
-  `pageInfo.hasNextPage`).
+  and opaque keyset cursors (`limit`/`after` + `has_more` + `total_count`;
+  `first`/`after` + `pageInfo.hasNextPage` + `totalCount`).
 - **Map** → fulfilment-hub proximity: `GET /api/v1/products/map` and
   `productsNear`/`productsInBounds`, with `latitude`/`longitude`/`radius_km` or
   the `min_lat`/`min_lon`/`max_lat`/`max_lon` bounding box, GeoJSON
@@ -123,6 +123,10 @@ pulling volatile slots via GraphQL.
 
 These 14 codes are defined once in `src/errors.js`, enumerated in
 `docs/openapi.yaml` (`Error.code`), and emitted identically by both paradigms.
+Every error also says what to do next: a `hint` (REST `error.hint`, GraphQL
+`extensions.hint`), plus machine-readable `details` for conflicts — `SLOT_FULL`
+lists open `alternatives` for the same product and `BOOKING_OVERLAP` names the
+`conflicting_booking_id` the caller can cancel.
 
 ## 8. Design Decisions
 
@@ -136,7 +140,96 @@ These 14 codes are defined once in `src/errors.js`, enumerated in
    middleware (`RateLimit-*` headers + 429) and an Apollo plugin (`RATE_LIMITED`
    error + the same headers), so rate limiting behaves identically everywhere.
 
-## 9. Future Evolution
+## 9. ADDR Analysis (Analyze · Design · Develop · Review)
+
+### Analyze
+The root cause of a poor shopping experience is three-fold: (a) shoppers can't
+find relevant products quickly across a large catalogue, (b) they can't tell
+whether a product can actually be delivered to their area, and (c) delivery
+slot double-booking leads to failed fulfilment. These pain points map directly
+to the List / Map / Calendar pattern triplet.
+
+### Design
+Resources: `Product`, `DeliverySlot`, `Booking` (see §3). URIs follow
+noun-first REST conventions (`/products`, `/slots`, `/bookings`). Two API
+surfaces share one service layer (see §4). The error catalogue (§7) is
+designed upfront so every failure path has a name and a human-readable hint.
+Money is stored as integer paise to prevent float rounding drift. Pagination
+uses keyset cursors for correctness under concurrent writes.
+
+### Develop
+All domain logic lives in `src/services/*` (framework-agnostic). REST adapters
+in `src/rest/*` and GraphQL resolvers in `src/graphql/*` are thin translation
+layers. SQLite (`better-sqlite3`) is used for the demo; the schema uses
+`CREATE TABLE IF NOT EXISTS` everywhere so the container is idempotent across
+restarts. The seed generates 500+ products across 20 Indian cities. CI
+(`.github/workflows/ci.yml`) runs lint + integration tests + frontend build on
+every pull request.
+
+### Review
+Identified issues and resolutions:
+- **N+1 GraphQL** → resolved with DataLoader batching per request.
+- **Race condition in booking** → resolved with SQLite transaction (INSERT +
+  UPDATE in one atomic unit).
+- **Float money drift** → resolved by making `price_paise` authoritative and
+  deprecating the convenience float.
+- **Stale pagination** → resolved by switching from OFFSET to keyset cursors.
+
+## 10. REST Constraint Analysis
+
+| Constraint | How ShopMesh satisfies it |
+|---|---|
+| **Client–Server** | The React storefront and any HTTP client are fully decoupled from the server. Clients interact only through the documented URI contract; server internals (SQLite, service layer) are invisible. |
+| **Statelessness** | Every request carries all information needed to service it (JWT in `Authorization` header, all filters as query params). The server holds no per-session state. Rate-limit buckets are keyed by IP, not session. |
+| **Cacheability** | `GET /api/v1/products` and `GET /api/v1/products/:id` are safe and idempotent — a CDN or browser can cache them. Slots are more volatile and should use a shorter TTL. The `has_more` + `next_cursor` pattern enables paginated responses to be cached per cursor. |
+| **Layered System** | Clients connect to the service endpoint and are unaware of Docker networking, the SQLite layer, or whether a future load balancer sits in front. The GraphQL layer sits behind the same `/graphql` route regardless of internal topology. |
+| **Uniform Interface** | All resources use standard HTTP verbs (GET, POST, DELETE), standard status codes, and the documented URI structure. The OpenAPI spec at `/docs` and `/openapi.yaml` is the single self-describing contract. |
+
+## 11. Architecture Diagram (textual)
+
+```
+  ┌─────────────────────────────────────────────────┐
+  │            Consumers                            │
+  │  React Storefront  │  Partner REST  │  Evaluator │
+  └─────────┬──────────┴────────┬───────┴─────┬──────┘
+            │                  │             │
+            ▼                  ▼             ▼
+  ┌──────────────────────────────────────────────────┐
+  │   JWT Auth · Rate Limiter · CORS (Express)        │
+  └────────────┬───────────────────────┬─────────────┘
+               │                       │
+        ┌──────▼──────┐         ┌──────▼──────┐
+        │ REST Router │         │  Apollo GQL  │
+        │ /api/v1/*   │         │  /graphql    │
+        └──────┬──────┘         └──────┬──────┘
+               │                       │
+               └───────────┬───────────┘
+                           ▼
+              ┌────────────────────────┐
+              │   Service Layer        │
+              │  products · bookings   │
+              │  (framework-agnostic)  │
+              └───────────┬────────────┘
+                          ▼
+              ┌────────────────────────┐
+              │   SQLite (better-      │
+              │   sqlite3) + Schema    │
+              │  products/slots/       │
+              │  bookings/users        │
+              └────────────────────────┘
+```
+
+## 12. JSON Format Decision
+
+We use **JSON** (not XML or Protobuf) because:
+1. Native to Node.js/Express with zero serialisation overhead.
+2. All three consumer classes (browser, partner integrations, evaluator) expect
+   JSON — no negotiation layer needed.
+3. Human-readable, simplifying debugging and the live Swagger docs.
+4. Protobuf would add schema compilation and binary decoding complexity for no
+   benefit at this scale.
+
+## 13. Future Evolution
 
 1. **`/api/v2` + schema growth** — add inventory reservation and multi-item
    carts; GraphQL grows by non-breaking field additions while `price` rides its

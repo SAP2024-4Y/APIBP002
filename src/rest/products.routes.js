@@ -12,12 +12,15 @@ const router = express.Router();
 // GET /api/v1/products — List API: filter + sort + cursor pagination
 router.get('/', (req, res, next) => {
   try {
-    const result = products.listProducts({
+    const filters = {
       status: req.query.status,
       category: req.query.category,
       q: req.query.q,
       minPrice: req.query.min_price,
       maxPrice: req.query.max_price,
+    };
+    const result = products.listProducts({
+      ...filters,
       sort: req.query.sort,
       order: req.query.order,
       limit: req.query.limit,
@@ -27,6 +30,7 @@ router.get('/', (req, res, next) => {
       data: result.items.map(productToRest),
       has_more: result.hasMore,
       next_cursor: result.nextCursor,
+      total_count: products.countProducts(filters),
       limit: result.limit,
       sort: result.sort,
       order: result.order,

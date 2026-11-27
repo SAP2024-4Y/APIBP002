@@ -22,6 +22,7 @@ const restRouter = require('./rest/router');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const { getDb } = require('./db/client');
 const { seed } = require('./db/seed');
+const { CATALOGUE } = require('./errors');
 const { loadOpenApiDocument, readOpenApiRaw, swaggerUi } = require('./docs/swagger');
 
 // Applies the shared rate limiter to GraphQL with a paradigm-correct error.
@@ -32,8 +33,8 @@ const graphqlRateLimitPlugin = {
       async didResolveOperation(ctx) {
         result = consume(ctx.contextValue.clientKey);
         if (result.limited) {
-          throw new GraphQLError('Too many requests. Slow down and retry later.', {
-            extensions: { code: 'RATE_LIMITED', http: { status: 429 } },
+          throw new GraphQLError(CATALOGUE.RATE_LIMITED.message, {
+            extensions: { code: 'RATE_LIMITED', http: { status: 429 }, hint: CATALOGUE.RATE_LIMITED.hint },
           });
         }
       },
@@ -109,8 +110,11 @@ async function buildApp() {
   app.use('/api/v1', restRateLimit, attachUser, restRouter);
   app.use('/api', notFoundHandler);
 
-  // Static React frontend (built into ./public by the Docker image).
-  const publicDir = path.join(__dirname, '..', 'public');
+  // Static React frontend: frontend/dist after a local `npm run build`, ./public in the Docker image.
+  const publicDir =
+    [path.join(__dirname, '..', 'frontend', 'dist'), path.join(__dirname, '..', 'public')].find((dir) =>
+      fs.existsSync(path.join(dir, 'index.html'))
+    ) || path.join(__dirname, '..', 'public');
   app.use(express.static(publicDir));
   app.get('*', (req, res, next) => {
     if (
