@@ -234,7 +234,7 @@ function LoginModal({ onClose, onDone, toast }) {
   const [c, setC] = useState({ username: 'demo', password: 'demo-password' });
   const submit = async (e) => {
     e.preventDefault();
-    try { const r = await api.login(c.username, c.password); onDone(r.token); toast('Signed in', 'ok'); onClose(); }
+    try { const r = await api.login(c.username, c.password); onDone(r.token, c.username); toast('Signed in', 'ok'); onClose(); }
     catch (err) { toast(`${err.code}: ${err.message}`, 'err'); }
   };
   return (
@@ -254,6 +254,7 @@ function LoginModal({ onClose, onDone, toast }) {
 export default function App() {
   const [tab, setTab] = useState('browse');
   const [token, setToken] = useState(null);
+  const [loggedInUser, setLoggedInUser] = useState(null);
   const [drawer, setDrawer] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -286,7 +287,7 @@ export default function App() {
         </nav>
         <div className="mast-right">
           {token
-            ? <><span className="who">Signed in as <b>demo</b></span><button className="ghost" onClick={() => { setToken(null); toast('Signed out'); }}>Sign out</button></>
+            ? <><span className="who">Signed in as <b>{loggedInUser}</b></span><button className="ghost" onClick={() => { setToken(null); setLoggedInUser(null); toast('Signed out'); }}>Sign out</button></>
             : <button className="solid" onClick={requireLogin}>Sign in</button>}
         </div>
       </header>
@@ -300,7 +301,7 @@ export default function App() {
       </footer>
 
       {drawer && <Drawer product={drawer} token={token} onClose={() => setDrawer(null)} toast={toast} requireLogin={requireLogin} />}
-      {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} onDone={setToken} toast={toast} />}
+      {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} onDone={(tok, user) => { setToken(tok); setLoggedInUser(user); }} toast={toast} />}
 
       <div className="toasts">
         {toasts.map((t) => <div key={t.id} className={`toast ${t.kind || ''}`}>{t.msg}</div>)}
