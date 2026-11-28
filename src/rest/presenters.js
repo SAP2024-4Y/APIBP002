@@ -33,13 +33,15 @@ function slotToRest(row) {
 }
 
 function bookingToRest(row) {
-  return {
+  const out = {
     id: row.id,
     slot_id: row.slot_id,
     user: row.username,
     quantity: row.quantity,
     created_at: row.created_at,
   };
+  if (row.product_id !== undefined) out.product_id = row.product_id;
+  return out;
 }
 
 module.exports = { productToRest, slotToRest, bookingToRest };

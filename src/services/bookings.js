@@ -53,8 +53,28 @@ function getSlotById(id) {
 function listBookingsForUser(username) {
   const db = getDb();
   return db
-    .prepare('SELECT * FROM bookings WHERE username = ? ORDER BY created_at DESC')
+    .prepare(
+      `SELECT b.*, s.product_id FROM bookings b
+       JOIN slots s ON s.id = b.slot_id
+       WHERE b.username = ? ORDER BY b.created_at DESC`
+    )
     .all(username);
+}
+
+function getBookingById(id, username) {
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT b.*, s.product_id FROM bookings b
+       JOIN slots s ON s.id = b.slot_id
+       WHERE b.id = ?`
+    )
+    .get(id);
+  if (!row) throw new AppError('NOT_FOUND', 'No booking exists with the given id.');
+  if (username && row.username !== username) {
+    throw new AppError('FORBIDDEN', 'You can only view your own bookings.');
+  }
+  return row;
 }
 
 // Core Calendar conflict logic. Two distinct 409 outcomes:
@@ -91,6 +111,7 @@ function createBooking({ slotId, quantity = 1, username }) {
   const booking = {
     id: newId('bk'),
     slot_id: slot.id,
+    product_id: slot.product_id,
     username,
     quantity: qty,
     created_at: new Date().toISOString(),
@@ -135,6 +156,55 @@ function createBooking({ slotId, quantity = 1, username }) {
   return booking;
 }
 
+function createSlot({ productId, startsAt, endsAt, capacity }) {
+  const db = getDb();
+  if (!productId) throw new AppError('VALIDATION_ERROR', 'product_id is required.');
+  const from = assertIso(startsAt, 'starts_at');
+  const to = assertIso(endsAt, 'ends_at');
+  if (!from) throw new AppError('VALIDATION_ERROR', 'starts_at is required.');
+  if (!to) throw new AppError('VALIDATION_ERROR', 'ends_at is required.');
+  if (from >= to) throw new AppError('VALIDATION_ERROR', 'starts_at must be strictly before ends_at.');
+  const cap = Number(capacity);
+  if (!Number.isInteger(cap) || cap < 1) {
+    throw new AppError('VALIDATION_ERROR', 'capacity must be a positive integer.');
+  }
+  // Verify product exists (throws PRODUCT_NOT_FOUND if not).
+  const product = db.prepare('SELECT id FROM products WHERE id = ?').get(productId);
+  if (!product) throw new AppError('PRODUCT_NOT_FOUND');
+
+  const slot = { id: newId('slot'), product_id: productId, starts_at: from, ends_at: to, capacity: cap, booked: 0 };
+  db.prepare(
+    'INSERT INTO slots (id, product_id, starts_at, ends_at, capacity, booked) VALUES (?, ?, ?, ?, ?, 0)'
+  ).run(slot.id, slot.product_id, slot.starts_at, slot.ends_at, slot.capacity);
+  return slot;
+}
+
+function listBookingsForSlot(slotId) {
+  const db = getDb();
+  getSlotById(slotId); // throws SLOT_NOT_FOUND if absent
+  return db
+    .prepare(
+      `SELECT b.*, s.product_id FROM bookings b
+       JOIN slots s ON s.id = b.slot_id
+       WHERE b.slot_id = ? ORDER BY b.created_at ASC`
+    )
+    .all(slotId);
+}
+
+function deleteSlot(slotId, productId) {
+  const db = getDb();
+  const slot = getSlotById(slotId); // SLOT_NOT_FOUND if absent
+  if (productId && slot.product_id !== productId) {
+    throw new AppError('NOT_FOUND', 'Slot does not belong to this product.');
+  }
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM bookings WHERE slot_id = ?').run(slotId);
+    db.prepare('DELETE FROM slots WHERE id = ?').run(slotId);
+  });
+  tx();
+  return { id: slotId, product_id: slot.product_id, deleted: true };
+}
+
 // Cancel a booking the caller owns, releasing the slot capacity.
 function cancelBooking({ id, username }) {
   const db = getDb();
@@ -155,4 +225,4 @@ function cancelBooking({ id, username }) {
   return { id, slot_id: booking.slot_id, cancelled: true };
 }
 
-module.exports = { listSlots, getSlotById, listBookingsForUser, createBooking, cancelBooking };
+module.exports = { listSlots, getSlotById, listBookingsForSlot, deleteSlot, listBookingsForUser, getBookingById, createSlot, createBooking, cancelBooking };

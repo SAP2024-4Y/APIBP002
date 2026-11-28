@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ShopMesh API — Developer Guide</title>
+<style>
+  :root {
+    --accent: #e8870e;
+    --accent-light: #fff4e6;
+    --bg: #ffffff;
+    --text: #1a1a1a;
+    --muted: #666;
+    --border: #e0e0e0;
+    --code-bg: #f5f5f5;
+    --code-border: #d0d0d0;
+    --method-get: #0a7c3e;
+    --method-get-bg: #e8f7ee;
+    --method-post: #1a5fad;
+    --method-post-bg: #e8f0fb;
+    --method-patch: #7c5700;
+    --method-patch-bg: #fff8e1;
+    --method-delete: #c0392b;
+    --method-delete-bg: #fdf0ef;
+    --deprecated-bg: #f5f5f5;
+    font-size: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 32px 24px 80px;
+  }
+  h1, h2, h3, h4 { font-weight: 700; line-height: 1.3; }
+  h1 { font-size: 2rem; color: var(--accent); margin-bottom: 4px; }
+  h2 { font-size: 1.35rem; border-bottom: 2px solid var(--accent); padding-bottom: 6px; margin: 40px 0 16px; }
+  h3 { font-size: 1.1rem; margin: 28px 0 10px; }
+  h4 { font-size: 0.95rem; margin: 18px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  p { margin: 10px 0; }
+  a { color: var(--accent); text-decoration: none; }
+  ul, ol { padding-left: 20px; margin: 10px 0; }
+  li { margin: 4px 0; }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+    font-size: 0.88em;
+    background: var(--code-bg);
+    border: 1px solid var(--code-border);
+    border-radius: 3px;
+    padding: 1px 5px;
+  }
+  pre {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 6px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 12px 0;
+    font-size: 0.85em;
+    line-height: 1.55;
+  }
+  pre code { background: none; border: none; padding: 0; color: inherit; font-size: inherit; }
+  .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 24px; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    vertical-align: middle;
+  }
+  .badge-get    { background: var(--method-get-bg);    color: var(--method-get); }
+  .badge-post   { background: var(--method-post-bg);   color: var(--method-post); }
+  .badge-patch  { background: var(--method-patch-bg);  color: var(--method-patch); }
+  .badge-delete { background: var(--method-delete-bg); color: var(--method-delete); }
+  .badge-dep    { background: #f0f0f0; color: #888; }
+  .badge-public   { background: #e8f7ee; color: #0a7c3e; }
+  .badge-customer { background: #e8f0fb; color: #1a5fad; }
+  .badge-admin    { background: #fff8e1; color: #7c5700; }
+  .endpoint {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 14px 0;
+    overflow: hidden;
+  }
+  .endpoint.deprecated { opacity: 0.7; background: var(--deprecated-bg); }
+  .endpoint-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #fafafa;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .endpoint-path {
+    font-family: 'SF Mono', monospace;
+    font-size: 0.92em;
+    font-weight: 600;
+    flex: 1;
+  }
+  .endpoint-body { padding: 12px 14px; }
+  .endpoint-desc { color: #444; font-size: 0.93em; }
+  .role-tag { font-size: 0.75em; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+    font-size: 0.9em;
+  }
+  th {
+    background: #f5f5f5;
+    text-align: left;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    font-weight: 600;
+  }
+  td { padding: 7px 10px; border: 1px solid var(--border); vertical-align: top; }
+  .toc { background: var(--accent-light); border-left: 4px solid var(--accent); padding: 16px 20px; border-radius: 0 6px 6px 0; margin: 20px 0 32px; }
+  .toc ol { margin: 0; }
+  .toc li { margin: 5px 0; }
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: var(--accent-light);
+    padding: 10px 14px;
+    border-radius: 0 6px 6px 0;
+    margin: 12px 0;
+    font-size: 0.93em;
+  }
+  .flow-box {
+    background: #1e1e1e;
+    color: #9cdcfe;
+    font-family: 'SF Mono', monospace;
+    font-size: 0.85em;
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 12px 0;
+    line-height: 1.8;
+  }
+  .flow-box .comment { color: #6a9955; }
+  .flow-box .verb  { color: #569cd6; }
+  .flow-box .path  { color: #ce9178; }
+  .flow-box .arrow { color: #666; }
+  .error-table td:first-child { font-family: monospace; font-size: 0.88em; }
+  .page-break { page-break-after: always; }
+  @media print {
+    body { max-width: 100%; padding: 20px; font-size: 12px; }
+    pre  { font-size: 0.8em; }
+    h2   { page-break-before: auto; }
+  }
+</style>
+</head>
+<body>
+
+<h1>ShopMesh API</h1>
+<p class="subtitle">APIBP002 — Developer Guide &nbsp;·&nbsp; REST + GraphQL &nbsp;·&nbsp; v1.0.0</p>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#quickstart">Quick Start</a></li>
+    <li><a href="#auth">Authentication</a></li>
+    <li><a href="#booking-flow">Booking Flow (Stateless REST)</a></li>
+    <li><a href="#rest-products">REST — Products</a></li>
+    <li><a href="#rest-slots">REST — Slots</a></li>
+    <li><a href="#rest-bookings">REST — Bookings</a></li>
+    <li><a href="#rest-admin">REST — Admin</a></li>
+    <li><a href="#graphql">GraphQL API</a></li>
+    <li><a href="#errors">Error Reference</a></li>
+    <li><a href="#standards">Standards &amp; Conventions</a></li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="overview">1. Overview</h2>
+
+<p>ShopMesh is a dual-interface API — the same domain services power both a
+<strong>REST surface</strong> (OpenAPI 3.0.3, served at <code>/docs</code>) and a
+<strong>GraphQL surface</strong> (served at <code>/graphql</code>, Apollo Sandbox). Both
+interfaces are served from the same Node.js/Express process on port <code>8080</code>.</p>
+
+<table>
+  <tr><th>Surface</th><th>Base URL</th><th>Documentation</th></tr>
+  <tr><td>REST</td><td><code>http://localhost:8080/api/v1</code></td><td><code>/docs</code> (Swagger UI)</td></tr>
+  <tr><td>GraphQL</td><td><code>http://localhost:8080/graphql</code></td><td><code>/graphql</code> (Apollo Sandbox)</td></tr>
+  <tr><td>Health</td><td><code>http://localhost:8080/health</code></td><td>—</td></tr>
+  <tr><td>Readiness</td><td><code>http://localhost:8080/ready</code></td><td>—</td></tr>
+</table>
+
+<h3>Roles</h3>
+<table>
+  <tr><th>Role</th><th>Actor</th><th>Demo credentials</th><th>Authentication</th></tr>
+  <tr><td><span class="badge badge-public">public</span></td><td>Any shopper or integration</td><td>—</td><td>None required</td></tr>
+  <tr><td><span class="badge badge-customer">customer</span></td><td>Signed-in shopper</td><td><code>demo</code> / <code>demo-password</code></td><td><code>Authorization: Bearer &lt;token&gt;</code></td></tr>
+  <tr><td><span class="badge badge-admin">admin</span></td><td>Catalogue manager</td><td><code>admin</code> / <code>admin-password</code></td><td><code>Authorization: Bearer &lt;token&gt;</code></td></tr>
+</table>
+
+<p>Missing/invalid token → <code>401 UNAUTHENTICATED</code>. Valid token without the required role → <code>403 FORBIDDEN</code>.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="quickstart">2. Quick Start</h2>
+
+<h3>Start the server</h3>
+<pre><code>npm install
+npm start
+# → ShopMesh listening on http://0.0.0.0:8080</code></pre>
+
+<h3>End-to-end booking in 4 curl commands</h3>
+<pre><code># Step 1 — Get a customer token
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/token \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"demo","password":"demo-password"}' | jq -r .token)
+
+# Step 2 — Browse products
+curl http://localhost:8080/api/v1/products?limit=5
+
+# Step 3 — List slots for a product
+curl http://localhost:8080/api/v1/products/prod_001/slots
+
+# Step 4 — Book a slot (canonical REST path)
+curl -X POST http://localhost:8080/api/v1/products/prod_001/slots/slot_001_2/bookings \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"quantity":1}'</code></pre>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="auth">3. Authentication</h2>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-post">POST</span>
+    <span class="endpoint-path">/api/v1/auth/token</span>
+    <span class="badge badge-public role-tag">public</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Exchange demo credentials for a JWT (expires in 2 h).</p>
+    <pre><code>curl -X POST http://localhost:8080/api/v1/auth/token \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"demo","password":"demo-password"}'
+
+# Response
+{
+  "token": "eyJ...",
+  "token_type": "Bearer",
+  "expires_in": "2h",
+  "role": "customer"
+}</code></pre>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-post">POST</span>
+    <span class="endpoint-path">/api/v1/auth/register</span>
+    <span class="badge badge-public role-tag">public</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Create a new customer account and immediately receive a JWT.</p>
+    <pre><code>curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"secret123","email":"alice@example.com"}'</code></pre>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="booking-flow">4. Booking Flow — Stateless REST</h2>
+
+<p>Every REST request is <strong>self-contained</strong>. No server-side session is maintained between steps — the client carries all state in the URL and request body.</p>
+
+<div class="flow-box">
+<span class="comment"># 1. Discover products</span>
+<span class="verb">GET</span>  <span class="path">/api/v1/products?category=Electronics&amp;status=active</span>
+
+<span class="comment"># 2. Select a product</span>
+<span class="verb">GET</span>  <span class="path">/api/v1/products/{id}</span>
+
+<span class="comment"># 3. See its available delivery slots</span>
+<span class="verb">GET</span>  <span class="path">/api/v1/products/{id}/slots?starts_at=2026-12-01T00:00:00Z</span>
+
+<span class="comment"># 4. Book a slot — full hierarchy in the URL (canonical)</span>
+<span class="verb">POST</span> <span class="path">/api/v1/products/{id}/slots/{slotId}/bookings</span>
+
+<span class="comment"># 5. Confirm the booking</span>
+<span class="verb">GET</span>  <span class="path">/api/v1/bookings/{bookingId}</span>
+
+<span class="comment"># 6. Cancel if needed (releases slot capacity)</span>
+<span class="verb">DELETE</span> <span class="path">/api/v1/bookings/{bookingId}</span>
+</div>
+
+<div class="callout">
+  <strong>Why this design is stateless:</strong> The booking URL
+  <code>POST /products/{id}/slots/{slotId}/bookings</code> encodes the complete
+  resource hierarchy. The server needs no prior context — it validates the
+  product exists, the slot belongs to that product, and the slot has capacity,
+  all from the URL alone.
+</div>
+
+<h3>Booking conflict responses</h3>
+<table>
+  <tr><th>409 code</th><th>When</th><th>details</th></tr>
+  <tr>
+    <td><code>SLOT_FULL</code></td>
+    <td>Slot capacity is exhausted for the requested quantity</td>
+    <td><code>alternatives[]</code> — up to 3 open slots for the same product</td>
+  </tr>
+  <tr>
+    <td><code>BOOKING_OVERLAP</code></td>
+    <td>Caller already holds a booking whose time window overlaps this slot</td>
+    <td><code>conflicting_booking_id</code>, <code>conflicting_slot_id</code></td>
+  </tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="rest-products">5. REST — Products</h2>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span class="endpoint-path">/api/v1/products</span>
+    <span class="badge badge-public role-tag">public</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">List products with filtering, sorting, and keyset cursor pagination.</p>
+    <table>
+      <tr><th>Param</th><th>Type</th><th>Description</th></tr>
+      <tr><td><code>status</code></td><td>string enum</td><td><code>active</code> | <code>out_of_stock</code> | <code>discontinued</code></td></tr>
+      <tr><td><code>category</code></td><td>string enum</td><td>Closed enum, case-insensitive (see Category enum)</td></tr>
+      <tr><td><code>q</code></td><td>string</td><td>Substring match on name or description</td></tr>
+      <tr><td><code>min_price</code> / <code>max_price</code></td><td>number (INR)</td><td>Price range filter, inclusive</td></tr>
+      <tr><td><code>sort</code></td><td>enum</td><td><code>created_at</code>(default) | <code>price</code> | <code>name</code> | <code>rating</code> | <code>id</code></td></tr>
+      <tr><td><code>order</code></td><td>enum</td><td><code>desc</code>(default) | <code>asc</code></td></tr>
+      <tr><td><code>limit</code></td><td>integer</td><td>Page size, default 20, max 100</td></tr>
+      <tr><td><code>after</code></td><td>string</td><td>Opaque cursor from previous <code>next_cursor</code></td></tr>
+    </table>
+    <pre><code>curl 'http://localhost:8080/api/v1/products?category=Electronics&status=active&limit=10'</code></pre>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span class="endpoint-path">/api/v1/products/map</span>
+    <span class="badge badge-public role-tag">public</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Geospatial search. Provide <strong>either</strong> a radius (<code>latitude</code>, <code>longitude</code>, <code>radius_km</code>) <strong>or</strong> a bounding box (<code>min_lat</code>, <code>min_lon</code>, <code>max_lat</code>, <code>max_lon</code>). Returns all matches in one response.</p>
+    <pre><code># Radius search — 50 km around Bengaluru
+curl 'http://localhost:8080/api/v1/products/map?latitude=12.9716&longitude=77.5946&radius_km=50'
+
+# Bounding box — Karnataka
+curl 'http://localhost:8080/api/v1/products/map?min_lat=11.5&min_lon=74.0&max_lat=18.5&max_lon=78.5'</code></pre>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span class="endpoint-path">/api/v1/products/{id}</span>
+    <span class="badge badge-public role-tag">public</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Fetch a single product by id.</p>
+    <pre><code>curl http://localhost:8080/api/v1/products/prod_001</code></pre>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-post">POST</span>
+    <span class="endpoint-path">/api/v1/products</span>
+    <span class="badge badge-admin role-tag">admin</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Create a product. Requires all required fields in the body.</p>
+    <pre><code>curl -X POST http://localhost:8080/api/v1/products \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name":"Monsoon Trek Backpack","category":"Sports","status":"active",
+    "price":2499,"inventory":40,"latitude":18.5204,"longitude":73.8567
+  }'</code></pre>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-patch">PATCH</span>
+    <span class="endpoint-path">/api/v1/products/{id}</span>
+    <span class="badge badge-admin role-tag">admin</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Partially update a product. Send only the fields to change.</p>
+    <pre><code>curl -X PATCH http://localhost:8080/api/v1/products/prod_001 \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"out_of_stock","inventory":0}'</code></pre>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-delete">DELETE</span>
+    <span class="endpoint-path">/api/v1/products/{id}</span>
+    <span class="badge badge-admin role-tag">admin</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Delete a product and cascade-delete its slots and bookings in one transaction.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="rest-slots">6. REST — Slots</h2>
+
+<h3>Slot fields</h3>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+  <tr><td><code>id</code></td><td>string</td><td>Unique slot id</td></tr>
+  <tr><td><code>product_id</code></td><td>string</td><td>Product this slot belongs to</td></tr>
+  <tr><td><code>starts_at</code></td><td>ISO 8601 UTC</td><td>Delivery window start</td></tr>
+  <tr><td><code>ends_at</code></td><td>ISO 8601 UTC</td><td>Delivery window end</td></tr>
+  <tr><td><code>capacity</code></td><td>integer</td><td>Maximum bookings</td></tr>
+  <tr><td><code>booked</code></td><td>integer</td><td>Confirmed bookings</td></tr>
+  <tr><td><code>available</code></td><td>integer</td><td><code>capacity − booked</code></td></tr>
+</table>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span class="endpoint-path">/api/v1/products/{id}/slots</span>
+    <span class="badge badge-public role-tag">public</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">List delivery slots for a specific product, with optional time-window filter. <strong>Use this before booking</strong> to show the customer which slots are available.</p>
+    <pre><code># All future slots for a product
+curl 'http://localhost:8080/api/v1/products/prod_001/slots?starts_at=2026-12-01T00:00:00Z'</code></pre>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span class="endpoint-path">/api/v1/products/{id}/slots/{slotId}</span>
+    <span class="badge badge-public role-tag">public</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Fetch a single slot scoped to a product. Returns 404 if the slot does not belong to this product.</p>
+    <pre><code>curl http://localhost:8080/api/v1/products/prod_001/slots/slot_001_1</code></pre>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-post">POST</span>
+    <span class="endpoint-path">/api/v1/products/{id}/slots</span>
+    <span class="badge badge-admin role-tag">admin</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Create a new delivery slot for a product. <code>ends_at</code> must be strictly after <code>starts_at</code>.</p>
+    <pre><code>curl -X POST http://localhost:8080/api/v1/products/prod_001/slots \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"starts_at":"2026-12-15T09:00:00Z","ends_at":"2026-12-15T12:00:00Z","capacity":20}'</code></pre>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span class="endpoint-path">/api/v1/slots</span>
+    <span class="badge badge-public role-tag">public</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Cross-product time-window slot search. Use when you need slots across multiple products (e.g. a calendar view). Optionally narrow with <code>product_id</code>.</p>
+    <pre><code># All slots in December
+curl 'http://localhost:8080/api/v1/slots?starts_at=2026-12-01T00:00:00Z&ends_at=2026-12-31T23:59:59Z'</code></pre>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span class="endpoint-path">/api/v1/slots/{id}</span>
+    <span class="badge badge-public role-tag">public</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Fetch a single slot by id (not scoped to a product).</p>
+    <pre><code>curl http://localhost:8080/api/v1/slots/slot_001_1</code></pre>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="rest-bookings">7. REST — Bookings</h2>
+
+<h3>Booking fields</h3>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+  <tr><td><code>id</code></td><td>string</td><td>Unique booking id</td></tr>
+  <tr><td><code>slot_id</code></td><td>string</td><td>The booked slot</td></tr>
+  <tr><td><code>product_id</code></td><td>string</td><td>Product the slot belongs to</td></tr>
+  <tr><td><code>user</code></td><td>string</td><td>Username who made the booking</td></tr>
+  <tr><td><code>quantity</code></td><td>integer</td><td>Units booked (≥ 1)</td></tr>
+  <tr><td><code>created_at</code></td><td>ISO 8601 UTC</td><td>When the booking was created</td></tr>
+</table>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-post">POST</span>
+    <span class="endpoint-path">/api/v1/products/{id}/slots/{slotId}/bookings</span>
+    <span class="badge badge-customer role-tag">customer</span>
+    <span class="badge badge-admin role-tag">admin</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc"><strong>Canonical booking creation.</strong> The full product → slot → booking hierarchy in the URL makes this endpoint self-contained and stateless. <code>quantity</code> defaults to 1.</p>
+    <pre><code>curl -X POST http://localhost:8080/api/v1/products/prod_001/slots/slot_001_2/bookings \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"quantity":1}'
+
+# Response 201
+{
+  "created": {
+    "id": "bk_a3f9c1...",
+    "slot_id": "slot_001_2",
+    "product_id": "prod_001",
+    "user": "demo",
+    "quantity": 1,
+    "created_at": "2026-11-28T10:00:00.000Z"
+  }
+}</code></pre>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span class="endpoint-path">/api/v1/bookings</span>
+    <span class="badge badge-customer role-tag">customer</span>
+    <span class="badge badge-admin role-tag">admin</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">List all bookings owned by the authenticated caller.</p>
+    <pre><code>curl http://localhost:8080/api/v1/bookings \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span class="endpoint-path">/api/v1/bookings/{id}</span>
+    <span class="badge badge-customer role-tag">customer</span>
+    <span class="badge badge-admin role-tag">admin</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Fetch a single booking (own only). Returns 403 for bookings belonging to another user.</p>
+    <pre><code>curl http://localhost:8080/api/v1/bookings/bk_a3f9c1 \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-delete">DELETE</span>
+    <span class="endpoint-path">/api/v1/bookings/{id}</span>
+    <span class="badge badge-customer role-tag">customer</span>
+    <span class="badge badge-admin role-tag">admin</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Cancel an owned booking. Releases the slot capacity immediately (atomic). Returns 403 for other users' bookings.</p>
+    <pre><code>curl -X DELETE http://localhost:8080/api/v1/bookings/bk_a3f9c1 \
+  -H "Authorization: Bearer $TOKEN"
+
+# Response 200
+{ "id": "bk_a3f9c1", "slot_id": "slot_001_2", "cancelled": true }</code></pre>
+  </div>
+</div>
+
+<div class="endpoint deprecated">
+  <div class="endpoint-header">
+    <span class="badge badge-post">POST</span>
+    <span class="endpoint-path">/api/v1/bookings</span>
+    <span class="badge badge-dep">deprecated</span>
+    <span class="badge badge-customer role-tag">customer</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Flat booking creation. Accepts <code>{"slot_id":"...","quantity":1}</code>. Response includes <code>Deprecation: true</code> header. <strong>Use the product-scoped path instead.</strong></p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="rest-admin">8. REST — Admin</h2>
+
+<div class="endpoint">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span class="endpoint-path">/api/v1/admin/stats</span>
+    <span class="badge badge-admin role-tag">admin</span>
+  </div>
+  <div class="endpoint-body">
+    <p class="endpoint-desc">Catalogue and booking metrics for the back-office dashboard.</p>
+    <pre><code>curl http://localhost:8080/api/v1/admin/stats \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# Response
+{
+  "stats": {
+    "products": 555,
+    "total_inventory": 97200,
+    "catalogue_value_paise": 123456789,
+    "bookings": 3,
+    "low_stock": 5,
+    "out_of_stock": 12,
+    "by_status": { "active": 538, "out_of_stock": 12, "discontinued": 5 }
+  }
+}</code></pre>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="graphql">9. GraphQL API</h2>
+
+<p>The GraphQL schema mirrors the REST domain. Use <code>http://localhost:8080/graphql</code> in Apollo Sandbox to explore interactively. Authentication uses the same <code>Authorization: Bearer &lt;token&gt;</code> header (set it in the Headers panel).</p>
+
+<h3>Queries</h3>
+<table>
+  <tr><th>Query</th><th>Role</th><th>Description</th></tr>
+  <tr><td><code>product(id)</code></td><td>public</td><td>Single product by id</td></tr>
+  <tr><td><code>products(...)</code></td><td>public</td><td>Paginated product list (Relay cursor)</td></tr>
+  <tr><td><code>productsNear(lat, lon, radius)</code></td><td>public</td><td>Proximity search</td></tr>
+  <tr><td><code>productsInBounds(minLat, minLon, maxLat, maxLon)</code></td><td>public</td><td>Bounding-box search</td></tr>
+  <tr><td><code>slots(productId?, startsAt?, endsAt?)</code></td><td>public</td><td>Slot calendar search</td></tr>
+  <tr><td><code>myBookings</code></td><td>customer/admin</td><td>Caller's own bookings</td></tr>
+</table>
+
+<h3>Mutations</h3>
+<table>
+  <tr><th>Mutation</th><th>Role</th><th>Description</th></tr>
+  <tr><td><code>requestToken(username, password)</code></td><td>public</td><td>Issue a JWT</td></tr>
+  <tr><td><code>bookSlot(slotId, quantity)</code></td><td>customer/admin</td><td>Create a booking</td></tr>
+  <tr><td><code>cancelBooking(bookingId)</code></td><td>customer/admin</td><td>Cancel owned booking</td></tr>
+</table>
+
+<h3>Example query</h3>
+<pre><code>query ShopMeshDemo {
+  products(first: 3, status: active, category: "Electronics") {
+    edges {
+      node {
+        id
+        name
+        pricePaise
+        currency
+        rating
+        slots {
+          id
+          startsAt
+          endsAt
+          available
+        }
+      }
+    }
+    pageInfo { hasNextPage endCursor }
+  }
+}
+</code></pre>
+
+<h3>Example mutation — full booking flow</h3>
+<pre><code># Step 1 — Get a token
+mutation GetToken {
+  requestToken(username: "demo", password: "demo-password") {
+    token
+    role
+  }
+}
+
+# Step 2 — Book a slot (use token in Authorization header)
+mutation Book {
+  bookSlot(slotId: "slot_001_2", quantity: 1) {
+    id
+    slotId
+    quantity
+    createdAt
+  }
+}
+</code></pre>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h2 id="errors">10. Error Reference</h2>
+
+<p>Every error response body: <code>{ "error": { "code", "message", "hint", "details"? } }</code></p>
+
+<table class="error-table">
+  <tr><th>HTTP</th><th>Code</th><th>When</th></tr>
+  <tr><td>400</td><td><code>VALIDATION_ERROR</code></td><td>Missing/invalid field, bad enum value, malformed query param</td></tr>
+  <tr><td>400</td><td><code>INVALID_CURSOR</code></td><td>Malformed <code>after</code> pagination cursor</td></tr>
+  <tr><td>401</td><td><code>INVALID_CREDENTIALS</code></td><td>Wrong username or password on <code>/auth/token</code></td></tr>
+  <tr><td>401</td><td><code>UNAUTHENTICATED</code></td><td>Missing or invalid JWT on a protected endpoint</td></tr>
+  <tr><td>403</td><td><code>FORBIDDEN</code></td><td>Valid JWT but insufficient role; or attempting another user's booking</td></tr>
+  <tr><td>404</td><td><code>NOT_FOUND</code></td><td>Generic resource not found</td></tr>
+  <tr><td>404</td><td><code>PRODUCT_NOT_FOUND</code></td><td>Product id does not exist</td></tr>
+  <tr><td>404</td><td><code>SLOT_NOT_FOUND</code></td><td>Slot id does not exist (or doesn't belong to this product)</td></tr>
+  <tr><td>409</td><td><code>SLOT_FULL</code></td><td>Slot capacity exhausted; <code>details.alternatives[]</code> lists open slots</td></tr>
+  <tr><td>409</td><td><code>BOOKING_OVERLAP</code></td><td>Caller already holds a booking that overlaps this slot's window</td></tr>
+  <tr><td>409</td><td><code>CONFLICT</code></td><td>Username already taken on register</td></tr>
+  <tr><td>422</td><td><code>UNPROCESSABLE</code></td><td>Semantically invalid (e.g. <code>quantity</code> not a positive integer)</td></tr>
+  <tr><td>422</td><td><code>INVALID_COORDINATES</code></td><td>lat/lon out of WGS 84 range</td></tr>
+  <tr><td>429</td><td><code>RATE_LIMITED</code></td><td>Too many requests; <code>Retry-After</code> header present</td></tr>
+  <tr><td>500</td><td><code>INTERNAL</code></td><td>Unexpected server error</td></tr>
+</table>
+
+<h3>SLOT_FULL example</h3>
+<pre><code>{
+  "error": {
+    "code": "SLOT_FULL",
+    "message": "Only 0 unit(s) remain in this slot.",
+    "hint": "Pick another slot from details.alternatives or lower the quantity.",
+    "details": {
+      "slot_id": "slot_001_1",
+      "requested": 1,
+      "available": 0,
+      "alternatives": [
+        {
+          "slot_id": "slot_001_2",
+          "starts_at": "2026-12-02T09:00:00.000Z",
+          "ends_at": "2026-12-02T12:00:00.000Z",
+          "available": 5
+        }
+      ]
+    }
+  }
+}</code></pre>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="standards">11. Standards &amp; Conventions</h2>
+
+<h3>Money</h3>
+<p>All prices are stored and returned as <strong>integer paise</strong> (<code>price_paise</code>). The convenience <code>price</code> field (rupees as a float) is deprecated — use <code>price_paise / 100</code> for display and <code>price_paise</code> for all calculations to avoid floating-point rounding.</p>
+<pre><code>// Correct
+const displayPrice = (product.price_paise / 100).toFixed(2);  // "24.99"
+
+// Avoid
+const displayPrice = product.price;  // deprecated float, may lose precision</code></pre>
+
+<h3>Timestamps</h3>
+<p>All timestamps are ISO 8601 UTC with a <code>Z</code> suffix, e.g. <code>2026-12-01T09:00:00.000Z</code>.</p>
+
+<h3>Coordinates</h3>
+<p>GeoJSON (RFC 7946) order: <code>[longitude, latitude]</code> (note: longitude first). WGS 84 degrees.</p>
+
+<h3>Pagination</h3>
+<p>Keyset cursors — no page numbers. Pass <code>next_cursor</code> as <code>after</code> for the next page. Cursors are opaque; do not parse or modify them. <code>has_more: false</code> means you are on the last page.</p>
+<pre><code>// First page
+GET /api/v1/products?limit=20
+// → { data: [...], has_more: true, next_cursor: "eyJ...", total_count: 555 }
+
+// Next page
+GET /api/v1/products?limit=20&after=eyJ...
+</code></pre>
+
+<h3>Rate Limits</h3>
+<p>120 requests per 60-second window per IP. Response headers: <code>RateLimit-Limit</code>, <code>RateLimit-Remaining</code>, <code>RateLimit-Reset</code>. On 429, a <code>Retry-After</code> header gives the wait in seconds.</p>
+
+<h3>Category enum</h3>
+<p>Electronics · Fashion · Home &amp; Kitchen · Books · Grocery · Sports · Beauty · Toys &amp; Games · Health &amp; Wellness. Input matching is case-insensitive; the response always returns the canonical spelling.</p>
+
+<hr style="margin-top:48px; border-color: var(--border);" />
+<p style="color:var(--muted); font-size:0.85em; margin-top:12px;">
+  ShopMesh APIBP002 &nbsp;·&nbsp; MIT License &nbsp;·&nbsp;
+  REST docs: <a href="http://localhost:8080/docs">/docs</a> &nbsp;·&nbsp;
+  GraphQL: <a href="http://localhost:8080/graphql">/graphql</a>
+</p>
+
+</body>
+</html>

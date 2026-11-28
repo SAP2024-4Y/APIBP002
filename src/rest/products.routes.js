@@ -5,7 +5,7 @@ const products = require('../services/products');
 const bookings = require('../services/bookings');
 const { requireAuth, requireRole } = require('../auth/middleware');
 const { AppError } = require('../errors');
-const { productToRest, slotToRest } = require('./presenters');
+const { productToRest, slotToRest, bookingToRest } = require('./presenters');
 
 const router = express.Router();
 
@@ -125,6 +125,80 @@ router.get('/:id/slots', (req, res, next) => {
       endsAt: req.query.ends_at,
     });
     res.status(200).json({ data: rows.map(slotToRest) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/v1/products/:id/slots/:slotId — single slot under a product
+router.get('/:id/slots/:slotId', (req, res, next) => {
+  try {
+    products.getProductById(req.params.id); // 404 if product unknown
+    const slot = bookings.getSlotById(req.params.slotId);
+    if (slot.product_id !== req.params.id) {
+      throw new AppError('NOT_FOUND', 'Slot does not belong to this product.');
+    }
+    res.status(200).json(slotToRest(slot));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/v1/products/:id/slots — admin creates a delivery slot for a product
+router.post('/:id/slots', requireAuth, requireRole('admin'), (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const slot = bookings.createSlot({
+      productId: req.params.id,
+      startsAt: body.starts_at,
+      endsAt: body.ends_at,
+      capacity: body.capacity,
+    });
+    res.status(201).json({ created: slotToRest(slot) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/v1/products/:id/slots/:slotId/bookings — canonical booking creation
+router.post('/:id/slots/:slotId/bookings', requireAuth, (req, res, next) => {
+  try {
+    // Confirm the slot belongs to this product before booking.
+    const slot = bookings.getSlotById(req.params.slotId);
+    if (slot.product_id !== req.params.id) {
+      throw new AppError('NOT_FOUND', 'Slot does not belong to this product.');
+    }
+    const body = req.body || {};
+    const booking = bookings.createBooking({
+      slotId: req.params.slotId,
+      quantity: body.quantity === undefined ? 1 : body.quantity,
+      username: req.user.username,
+    });
+    res.status(201).json({ created: bookingToRest(booking) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/v1/products/:id/slots/:slotId/bookings — list bookings for a slot (admin)
+router.get('/:id/slots/:slotId/bookings', requireAuth, requireRole('admin'), (req, res, next) => {
+  try {
+    const slot = bookings.getSlotById(req.params.slotId);
+    if (slot.product_id !== req.params.id) {
+      throw new AppError('NOT_FOUND', 'Slot does not belong to this product.');
+    }
+    const rows = bookings.listBookingsForSlot(req.params.slotId);
+    res.status(200).json({ data: rows.map(bookingToRest), slot_id: req.params.slotId, count: rows.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/v1/products/:id/slots/:slotId — admin deletes a slot (cascades bookings)
+router.delete('/:id/slots/:slotId', requireAuth, requireRole('admin'), (req, res, next) => {
+  try {
+    const result = bookings.deleteSlot(req.params.slotId, req.params.id);
+    res.status(200).json(result);
   } catch (err) {
     next(err);
   }
